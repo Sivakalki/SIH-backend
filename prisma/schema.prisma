@@ -23,6 +23,88 @@ model User{
   role Role @default(USER)
 }
 
+model Application {
+  id              Int            @id @default(autoincrement())
+  firstname       String
+  lastname        String
+  email           String         @unique
+  phone           String
+  applicationDate DateTime       @default(now())
+  aadharID        String         @unique
+  caste           CASTE          @default(GENERAL)
+  addressProofId  Int            @unique
+  dobProofId      Int            @unique
+  casteProofId    Int            @unique
+  addressProof    AddressProof   @relation(fields: [addressProofId], references: [id])
+  dobProof        DobProof       @relation(fields: [dobProofId], references: [id])
+  casteProof      CasteProof     @relation(fields: [casteProofId], references: [id])
+  status          STATUS         @default(PENDING)
+}
+
+model AddressProof {
+  id    Int        @id @default(autoincrement())
+  type  ADDRESSPROOF
+  file  String     // Assuming you are storing file URL or file path
+  application Application? @relation
+}
+
+model DobProof {
+  id    Int        @id @default(autoincrement())
+  type  DOBPROOF
+  file  String     // Assuming you are storing file URL or file path
+  application Application? @relation
+}
+
+model CasteProof {
+  id    Int        @id @default(autoincrement())
+  type  CASTEPROOF
+  file  String     // Assuming you are storing file URL or file path
+  application Application? @relation
+}
+
+model Address {
+  id       Int     @id @default(autoincrement())
+  village  String
+  mandal   String
+  pincode  String
+  address  String
+  state    String
+  district String
+}
+
+enum ADDRESSPROOF {
+  AADHAAR
+  GAS
+  ELECTRICITY
+  WATER
+}
+
+enum DOBPROOF {
+  PAN
+  SSC
+}
+
+enum CASTEPROOF {
+  FATHER
+  MOTHER
+  SIBLING
+}
+
+enum CASTE {
+  OC
+  SC
+  OBC
+  ST
+  OC_EWS
+  GENERAL
+}
+
+enum STATUS{
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum Role{
   USER
   ADMIN

@@ -2,13 +2,16 @@ const express = require("express");
 const PORT = process.env.PORT || 8000;
 const app = express();
 const dotenv = require("dotenv")
+const cors = require('cors')
+
 dotenv.config({})
 
+app.use(cors())
 app.use(express.json());
 const userRouter = require("./routes/userRoute"); // Corrected the path
-
-app.use("/user", userRouter); // Using the router
-
+const applicationRouter = require("./routes/applicationRoute");
+app.use("/users", userRouter); // Using the router
+app.use("/api", applicationRouter)
 app.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
 });
