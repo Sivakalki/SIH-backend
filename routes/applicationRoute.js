@@ -93,4 +93,9 @@ router.post("/application", upload.fields([
   }
 });
 
+
+router.get("/getAddressDetails",(req,res)=>{
+  
+})
+
 module.exports = router;

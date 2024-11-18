@@ -13,15 +13,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User{
-  id Int @id @default(autoincrement())
-  username String @unique
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
   firstName String?
-  lastName String?
-  email String @unique
-  password String
-  role Role @default(USER)
+  lastName  String?
+  email     String    @unique
+  password  String
+  role      Role      @default(USER)
+  district  District? @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  districtId Int?
+  mro       MRO?      @relation(fields: [mroId], references: [id], onDelete: Cascade)
+  mroId     Int?
+  vro       VRO?      @relation(fields: [vroId], references: [id], onDelete: Cascade)
+  vroId     Int?
 }
+
+model District {
+  id       Int    @id @default(autoincrement())
+  district String
+  state    String
+  users    User[] // Multiple users can belong to a district
+}
+
+model MRO {
+  id       Int    @id @default(autoincrement())
+  mandal   String
+  district String
+  state    String
+  users    User[] // Multiple users can belong to an MRO
+}
+
+model VRO {
+  id       Int    @id @default(autoincrement())
+  village  String
+  mandal   String
+  district String
+  state    String
+  pincode  String
+  users    User[] // Multiple users can belong to a VRO
+}
+
 
 model Application {
   id              Int            @id @default(autoincrement())
@@ -35,9 +67,9 @@ model Application {
   addressProofId  Int            @unique
   dobProofId      Int            @unique
   casteProofId    Int            @unique
-  addressProof    AddressProof   @relation(fields: [addressProofId], references: [id])
-  dobProof        DobProof       @relation(fields: [dobProofId], references: [id])
-  casteProof      CasteProof     @relation(fields: [casteProofId], references: [id])
+  addressProof    AddressProof   @relation(fields: [addressProofId], references: [id], onDelete: Cascade)
+  dobProof        DobProof       @relation(fields: [dobProofId], references: [id], onDelete: Cascade)
+  casteProof      CasteProof     @relation(fields: [casteProofId], references: [id], onDelete: Cascade)
   status          STATUS         @default(PENDING)
 }
 
