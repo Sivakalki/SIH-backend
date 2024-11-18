@@ -27,7 +27,7 @@ router.post('/login', async (req, res) => {
         // console.log(passwordMatch)
         if (passwordMatch) {
             const generatedToken = generateToken({ username: users.username, email: users.email })
-            return res.status(200).json({ "message": "Succesfully logged in", token: generatedToken })
+            return res.status(200).json({ "message": "Succesfully logged in", token: generatedToken ,data:users})
         }
         return res.status(400).json({ "message": "Wrong Password" })
         
