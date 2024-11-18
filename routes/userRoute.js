@@ -1,4 +1,3 @@
-
 const express = require("express");
 const router = express.Router(); // Initialize the router
 const prisma = require('../prisma/prisma')
@@ -11,6 +10,32 @@ const { verify } = require("jsonwebtoken");
 router.get('/', (req, res) => { // Define the route
     res.status(200).send("Hello");
 });
+
+router.post('/login', async (req, res) => {
+    try {
+        const users = await prisma.user.findFirst({
+            where: {
+                email: req.body.email
+            }
+        }
+        )
+        if (!users) {
+            return res.status(404).json({ "message": "User doesn't exist" })
+        }
+        let hashedPassword = users.password
+        let passwordMatch = await comparePwd(req.body.password, hashedPassword)
+        // console.log(passwordMatch)
+        if (passwordMatch) {
+            const generatedToken = generateToken({ username: users.username, email: users.email })
+            return res.status(200).json({ "message": "Succesfully logged in", token: generatedToken })
+        }
+        return res.status(400).json({ "message": "Wrong Password" })
+        
+    } catch (error) {
+        console.log(error)
+    }
+    
+})
 
 router.post("/signup", async (req, res) => {
     try {

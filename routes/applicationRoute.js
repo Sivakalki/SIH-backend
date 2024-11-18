@@ -94,8 +94,55 @@ router.post("/application", upload.fields([
 });
 
 
-router.get("/getAddressDetails",(req,res)=>{
-  
+router.get("/getAddressDetails", async (req, res) => {
+  const {pincode} = req.pincode
+  if(!pincode){
+    return res.status(404).json({"message":"enter the valid pincode"})
+  }
+  try{
+    const vroDetails = await prisma.vRO.findMany({
+      where:{
+        pincode:pincode
+      },
+      select:{
+        pincode: true,
+        state: true,
+        district: true,
+        village: true,
+      }
+    })
+    if(vroDetails.length() === 0){
+      return res.status(400).json({"message":"There is no user data"})
+    }
+  }
+  catch(e){
+    
+  }
 })
 
+router.get("/getAllPincodes", async (req, res) => {
+  try {
+    // Fetch all unique pincodes from the VRO table
+    const vroDetails = await prisma.vRO.findMany({
+      select: {
+        pincode: true, // Only select the pincode field
+      },
+      distinct: ["pincode"], // Ensure uniqueness
+    });
+
+    // If no pincodes are found
+    if (vroDetails.length === 0) {
+      return res.status(404).json({ message: "No pincodes found" });
+    }
+
+    // Extract the pincode values from the result
+    const pincodes = vroDetails.map(vro => vro.pincode);
+
+    // Return the list of pincodes
+    return res.status(200).json({ pincodes });
+  } catch (error) {
+    console.error("Error fetching pincodes:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+})
 module.exports = router;
