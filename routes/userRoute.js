@@ -38,110 +38,154 @@ router.post('/login', async (req, res) => {
 })
 
 router.post("/signup", async (req, res) => {
-    try {
-      // Check if the user already exists
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: req.body.email },
-            { username: req.body.username }
-          ]
-        }
-      });
-      if (existingUser) {
-        return res.status(403).json({ message: "User already exists with that email-id or username" });
-      }
-  
-      // Check if passwords match
-      if (req.body.password !== req.body.confirm_password) {
-        return res.status(403).json({ message: "Passwords didn't match" });
-      }
-  
-      // Hash the password
-      const hashedPassword = await hashPwd(req.body.password);
-  
-      // Generate token
-      const generatedToken = generateToken({ username: req.body.username, email: req.body.email });
-  
-      // Determine role
-      let role = "USER";
-      if (req.body.role) {
-        role = req.body.role;
-      }
-  
-      // Prepare related data for District, MRO, or VRO based on role
-      let districtData = null;
-      let mroData = null;
-      let vroData = null;
-  
-      if (role === "DISTRICT") {
-        if (!req.body.district || !req.body.state) {
-          return res.status(400).json({ message: "District and state are required for DISTRICT role" });
-        }
-        districtData = await prisma.district.create({
-          data: {
-            district: req.body.district,
-            state: req.body.state
-          }
-        });
-      } else if (role === "MRO") {
-        if (!req.body.mandal || !req.body.district || !req.body.state) {
-          return res.status(400).json({ message: "Mandal, district, and state are required for MRO role" });
-        }
-        mroData = await prisma.mRO.create({
-          data: {
-            mandal: req.body.mandal,
-            district: req.body.district,
-            state: req.body.state
-          }
-        });
-      } else if (role === "VRO") {
-        if (!req.body.village || !req.body.mandal || !req.body.district || !req.body.state || !req.body.pincode) {
-          return res.status(400).json({ message: "Village, mandal, district, pincode and state are required for VRO role" });
-        }
-        vroData = await prisma.vRO.create({
-          data: {
-            village: req.body.village,
-            mandal: req.body.mandal,
-            district: req.body.district,
-            state: req.body.state,
-            pincode: req.body.pincode
-          }
-        });
-      }
-  
-      // Create the user
-      const user = await prisma.user.create({
-        data: {
-          username: req.body.username,
-          email: req.body.email,
-          password: hashedPassword,
-          role: role,
-          district: districtData ? { connect: { id: districtData.id } } : undefined,
-          mro: mroData ? { connect: { id: mroData.id } } : undefined,
-          vro: vroData ? { connect: { id: vroData.id } } : undefined
-        }
-      });
-  
-      // Return success response
-      return res.status(200).json({
-        message: "User Created Successfully",
-        token: generatedToken,
-        data: user
-      });
-    } catch (e) {
-      console.error(e);
-      return res.status(500).json({ message: "Something went wrong" });
+  try {
+    const { email, username, password, confirm_password, role, phone, ...rest } = req.body;
+
+    // Validate passwords
+    if (password !== confirm_password) {
+      return res.status(400).json({ message: "Passwords do not match." });
     }
-  });
-  
+
+    // Check if the user already exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email:email }, { name:username }]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists with this email or username." });
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPwd(password);
+
+    let user = null;
+    let relatedData = null;
+
+    const role_id =await prisma.role.findFirst({
+      where:{
+        role_type: role
+      },
+      select:{
+        role_id: true
+      }
+    })
+
+    console.log(role_id)
+    // Create user first
+    user = await prisma.user.create({
+      data: {
+        email,
+        name:username,
+        password: hashedPassword,
+        phone,
+        role_id:role_id.role_id
+      }
+    });
+
+   
+    // Role-specific logic
+    switch (role_id.role_id) {
+      case 0:
+        // No additional data needed for applicants
+        break;
+
+      case 3:  //svro
+        if (!rest.pincode || !rest.state || !rest.district || !rest.mandal || !rest.sachivalayam) {
+          return res.status(400).json({
+            message: "Pincode, state, district, mandal, and sachivalayam are required for SVRO role."
+          });
+        }
+        relatedData = await prisma.sVRO.create({
+          data: {
+            pincode: rest.pincode,
+            state: rest.state,
+            district: rest.district,
+            mandal: rest.mandal,
+            sachivalayam: rest.sachivalayam,
+            user: {
+              connect: { user_id: user.user_id }
+            }
+          }
+        });
+        break;
+
+      case 4:   //mvro 
+        if (!rest.village || !rest.mandal || !rest.district || !rest.state || !rest.pincode) {
+          return res.status(400).json({
+            message: "Village, mandal, district, pincode, and state are required for MVRO role."
+          });
+        }
+        relatedData = await prisma.mVRO.create({
+          data: {
+            village: rest.village,
+            mandal: rest.mandal,
+            district: rest.district,
+            state: rest.state,
+            pincode: rest.pincode,
+            user: {
+              connect: { user_id: user.user_id }
+            }
+          }
+        });
+        break;
+
+      case 5:     //RI
+        if (!rest.region || !rest.state || !rest.district) {
+          return res.status(400).json({
+            message: "Region, state, and district are required for RI role."
+          });
+        }
+        relatedData = await prisma.rI.create({
+          data: {
+            region: rest.region,
+            state: rest.state,
+            district: rest.district,
+            user: {
+              connect: { user_id: user.user_id }
+            }
+          }
+        });
+        break;
+
+      case 6:     //MRO
+        if (!rest.mandal || !rest.district || !rest.state) {
+          return res.status(400).json({
+            message: "Mandal, district, and state are required for MRO role."
+          });
+        }
+        relatedData = await prisma.mRO.create({
+          data: {
+            mandal: rest.mandal,
+            district: rest.district,
+            state: rest.state,
+            user: {
+              connect: { user_id: user.user_id }
+            }
+          }
+        });
+        break;
+
+      default:
+        return res.status(400).json({ message: "Invalid role specified." });
+    }
+
+    return res.status(201).json({
+      message: "User created successfully!",
+      user,
+      relatedData
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+});
+
 
 router.get("/user", async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
-        
-        // Log the authorization header for debugging (can be removed in production)
-        console.log("Authorization Header:", authHeader);
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return res.status(401).json({ "message": "No token provided" });

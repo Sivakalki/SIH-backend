@@ -14,133 +14,221 @@ datasource db {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  username  String    @unique
-  firstName String?
-  lastName  String?
-  email     String    @unique
-  password  String
-  role      Role      @default(USER)
-  district  District? @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  districtId Int?
-  mro       MRO?      @relation(fields: [mroId], references: [id], onDelete: Cascade)
-  mroId     Int?
-  vro       VRO?      @relation(fields: [vroId], references: [id], onDelete: Cascade)
-  vroId     Int?
+  user_id      Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  password     String
+  phone        String
+  role         Role     @relation(fields: [role_id], references: [role_id])
+  role_id      Int
+  created_time DateTime @default(now())
+  ri RI[]
+  Report Report[]
+  svro SVRO[]
+  mvro MVRO[]
+  mro MRO[]
+  Application Application[]
 }
 
-model District {
-  id       Int    @id @default(autoincrement())
-  district String
-  state    String
-  users    User[] // Multiple users can belong to a district
-}
+model Role {
+  role_id   Int     @id @default(autoincrement())
+  role_type String  @unique
+  users     User[]
 
-model MRO {
-  id       Int    @id @default(autoincrement())
-  mandal   String
-  district String
-  state    String
-  users    User[] // Multiple users can belong to an MRO
-}
-
-model VRO {
-  id       Int    @id @default(autoincrement())
-  village  String
-  mandal   String
-  district String
-  state    String
-  pincode  String
-  users    User[] // Multiple users can belong to a VRO
-}
-
-
-model Application {
-  id              Int            @id @default(autoincrement())
-  firstname       String
-  lastname        String
-  email           String         @unique
-  phone           String
-  applicationDate DateTime       @default(now())
-  aadharID        String         @unique
-  caste           CASTE          @default(GENERAL)
-  addressProofId  Int            @unique
-  dobProofId      Int            @unique
-  casteProofId    Int            @unique
-  addressProof    AddressProof   @relation(fields: [addressProofId], references: [id], onDelete: Cascade)
-  dobProof        DobProof       @relation(fields: [dobProofId], references: [id], onDelete: Cascade)
-  casteProof      CasteProof     @relation(fields: [casteProofId], references: [id], onDelete: Cascade)
-  status          STATUS         @default(PENDING)
-}
-
-model AddressProof {
-  id    Int        @id @default(autoincrement())
-  type  ADDRESSPROOF
-  file  String     // Assuming you are storing file URL or file path
-  application Application? @relation
-}
-
-model DobProof {
-  id    Int        @id @default(autoincrement())
-  type  DOBPROOF
-  file  String     // Assuming you are storing file URL or file path
-  application Application? @relation
-}
-
-model CasteProof {
-  id    Int        @id @default(autoincrement())
-  type  CASTEPROOF
-  file  String     // Assuming you are storing file URL or file path
-  application Application? @relation
+  Application Application[]
 }
 
 model Address {
-  id       Int     @id @default(autoincrement())
-  village  String
-  mandal   String
-  pincode  String
-  address  String
-  state    String
-  district String
+  address_id    Int      @id @default(autoincrement())
+  pincode       String
+  state         String
+  district      String
+  mandal        String
+  sachivalayam  String
+  application   Application? 
 }
 
-enum ADDRESSPROOF {
-  AADHAAR
-  GAS
-  ELECTRICITY
-  WATER
+model Caste {
+  caste_id   Int      @id @default(autoincrement())
+  caste_type String   @unique
+  applications Application[]
 }
 
-enum DOBPROOF {
-  PAN
-  SSC
+model Application {
+  application_id        Int        @id @default(autoincrement())
+  full_name             String
+  dob                   DateTime
+  gender                GENDER
+  religion              String
+  caste                 Caste      @relation(fields: [caste_id], references: [caste_id])
+  caste_id              Int        
+  sub_caste             String
+  parent_religion       String
+  parent_guardian_id  Int
+  parent_guardian_type  ParentGuardianType @relation(fields: [parent_guardian_id],references: [id])
+  parent_guardian_name  String
+  address_id            Int        @unique
+  address               Address    @relation(fields: [address_id], references: [address_id])
+  addressProof_id       Int    @unique
+  addressProof          AddressProof @relation(fields: [addressProof_id], references: [id])
+  casteProof_id         Int @unique
+  casteProof            CasteProof  @relation(fields: [casteProof_id], references: [id])
+  dobProof_id           Int @unique
+  dobProof              DobProof @relation(fields: [dobProof_id], references: [id])
+  marital_status        MARITAL
+  aadhar_num            String  @unique
+  phone_num             String  
+  email                 String
+  status              STATUS
+  current_user_id    Int
+  current_user       User       @relation(fields: [current_user_id], references: [user_id])
+  mvro_user_id       Int?
+  mvro_user          MVRO?      @relation(fields: [mvro_user_id], references: [user_id])
+  svro_user_id       Int?
+  svro_user          SVRO?      @relation(fields: [svro_user_id], references: [user_id])
+  current_stage_id        Int
+  current_stage   Role? @relation(fields: [current_stage_id], references: [role_id])
+  created_at            DateTime   @default(now())
+  updated_at            DateTime   @updatedAt
+  certificate           Certificate?  // Optional one-to-one relation
+  report Report[]
+  counter Int @default(0)
 }
 
-enum CASTEPROOF {
-  FATHER
-  MOTHER
-  SIBLING
+
+model Report {
+  report_id        Int        @id @default(autoincrement())
+  application      Application @relation(fields: [application_id], references: [application_id])
+  application_id   Int
+  level            String     // SVRO, MVRO, RI, MRO
+  handler_id       Int
+  handler          User       @relation(fields: [handler_id], references: [user_id])
+  description      String
+  status           String     // Pending, Approved, Rejected, Correction Needed
+  rejection_reason String?
+  created_time     DateTime   @default(now())
 }
 
-enum CASTE {
-  OC
-  SC
-  OBC
-  ST
-  OC_EWS
-  GENERAL
+model Certificate {
+  id             Int         @id @default(autoincrement())
+  caste_id       Int
+  validity       DateTime
+  file_path      String
+  application_id Int         @unique // Ensure one-to-one relation
+  application    Application @relation(fields: [application_id], references: [application_id]) // Link to the Application
+}
+
+model SVRO {
+  svro_id      Int    @id @default(autoincrement())
+  pincode      String
+  state        String
+  district     String
+  mandal       String
+  sachivalayam String
+  application Application[]
+  user         User   @relation(fields: [user_id], references: [user_id])
+  user_id      Int   @unique
+}
+
+model MVRO {
+  mvro_id   Int    @id @default(autoincrement())
+  state     String
+  district  String
+  mandal    String
+  type      String // Permanent or Temporary
+  sachivalayam String
+  pincode String
+  application Application[]
+  user      User   @relation(fields: [user_id], references: [user_id])
+  user_id   Int @unique
+}
+
+model RI {
+  ri_id     Int    @id @default(autoincrement())
+  state     String
+  district  String
+  mandal    String
+  user      User   @relation(fields: [user_id], references: [user_id])
+  user_id   Int @unique
+}
+
+model MRO {
+  mro_id    Int    @id @default(autoincrement())
+  state     String
+  district  String
+  user      User   @relation(fields: [user_id], references: [user_id])
+  user_id   Int @unique
+}
+
+model AddressProofType {
+  id               Int    @id @default(autoincrement())
+  addressProofType String @unique
+  addressProofs    AddressProof[] // One-to-many relationship
+}
+
+model AddressProof {
+  id               Int                @id @default(autoincrement())
+  typeId           Int
+  filepath         String
+  type             AddressProofType   @relation(fields: [typeId], references: [id])
+
+  @@index([typeId], name: "AddressProof_typeId_index")
+  Application Application[] 
+}
+
+model DobProofType {
+  id           Int    @id @default(autoincrement())
+  dobProofType String @unique
+  dobProofs DobProof[]
+}
+
+model DobProof {
+  id           Int    @id @default(autoincrement())
+  typeId      String
+  filepath         String
+  type DobProofType @relation(fields: [typeId], references: [dobProofType])
+
+  @@index([typeId],name:"DobProof_typeId_index")
+  Application Application[]
+}
+
+
+model CasteProofType {
+  id        Int    @id @default(autoincrement())
+  casteProofType String @unique
+  casteProof CasteProof[]
+}
+
+model CasteProof {
+  id         Int    @id @default(autoincrement())
+  typeId String @unique
+  filepath         String
+  type CasteProofType @relation(fields: [typeId], references: [casteProofType])
+
+  @@index([typeId], name: "CasteProof_typeId_index")
+  Application Application[]
+}
+
+model ParentGuardianType{
+  id Int @id @default(autoincrement())
+  type String @unique
+
+  Application Application[]
 }
 
 enum STATUS{
   PENDING
-  ACCEPTED
+  COMPLETED
   REJECTED
 }
 
-enum Role{
-  USER
-  ADMIN
-  MRO
-  VRO
-  DISTRICT_OFFICER
+enum GENDER{
+  MALE
+  FEMALE
+  TRANSGENDER
+}
+
+enum MARITAL{
+  SINGLE
+  MARRIED
 }
