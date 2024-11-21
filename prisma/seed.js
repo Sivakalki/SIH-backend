@@ -139,8 +139,38 @@ async function main() {
         caste_type:"ST"
     }
   })
+
+  const mother = await prisma.parentGuardianType.upsert({
+    where:{
+      type:"MOTHER"
+    },update:{},
+    create:{
+      type: "MOTHER"
+    }
+  })
+  const father = await prisma.parentGuardianType.upsert({
+    where:{
+      type:"FATHER"
+    },update:{},
+    create:{
+      type: "FATHER"
+    }
+  })
+  const sibling = await prisma.parentGuardianType.upsert({
+    where:{
+      type:"SIBLING"
+    },update:{},
+    create:{
+      type: "SIBLING"
+    }
+  })
   console.log({ aadhaar, electricity, gas })
+  prisma.user.deleteMany({})
+  prisma.mVRO.deleteMany({})
+  prisma.sVRO.deleteMany({})
+  prisma.application.deleteMany({})
 }
+  
 main()
   .then(async () => {
     await prisma.$disconnect()

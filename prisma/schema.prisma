@@ -45,6 +45,7 @@ model Address {
   district      String
   mandal        String
   sachivalayam  String
+  address String
   application   Application? 
 }
 
@@ -80,19 +81,20 @@ model Application {
   phone_num             String  
   email                 String
   status              STATUS
-  current_user_id    Int
-  current_user       User       @relation(fields: [current_user_id], references: [user_id])
-  mvro_user_id       Int?
-  mvro_user          MVRO?      @relation(fields: [mvro_user_id], references: [user_id])
-  svro_user_id       Int?
-  svro_user          SVRO?      @relation(fields: [svro_user_id], references: [user_id])
-  current_stage_id        Int
+  current_user_id    Int?
+  current_user       User?       @relation(fields: [current_user_id], references: [user_id])
+  mvro_user_id       Int
+  mvro_user          MVRO      @relation(fields: [mvro_user_id], references: [user_id])
+  svro_user_id       Int
+  svro_user          SVRO      @relation(fields: [svro_user_id], references: [user_id])
+  current_stage_id        Int?
   current_stage   Role? @relation(fields: [current_stage_id], references: [role_id])
   created_at            DateTime   @default(now())
   updated_at            DateTime   @updatedAt
   certificate           Certificate?  // Optional one-to-one relation
   report Report[]
   counter Int @default(0)
+  rejection_reason String?
 }
 
 
@@ -131,16 +133,24 @@ model SVRO {
 }
 
 model MVRO {
-  mvro_id   Int    @id @default(autoincrement())
+  mvro_id   Int            @id @default(autoincrement())
   state     String
   district  String
   mandal    String
-  type      String // Permanent or Temporary
-  sachivalayam String
-  pincode String
+  type      MVROTYPE     
   application Application[]
-  user      User   @relation(fields: [user_id], references: [user_id])
-  user_id   Int @unique
+  sachivalayams Sachivalayam[] // Relationship to Sachivalayam table
+  user      User           @relation(fields: [user_id], references: [user_id])
+  user_id   Int            @unique  
+}
+
+model Sachivalayam {
+  sachivalayam_id Int   @id @default(autoincrement())
+  name            String
+  mvro_id         Int
+  mvro            MVRO  @relation(fields: [mvro_id], references: [mvro_id])
+
+  @@index([mvro_id], name: "Sachivalayam_mvro_id_index")
 }
 
 model RI {
@@ -231,4 +241,9 @@ enum GENDER{
 enum MARITAL{
   SINGLE
   MARRIED
+}
+
+enum MVROTYPE{
+  PERMENANT
+  TEMPORARY
 }

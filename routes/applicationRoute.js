@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const prisma = require("../prisma/prisma"); // Import Prisma client
+const { log } = require("console");
 const router = express.Router();
 
 // Set up file storage for multer
@@ -19,209 +20,257 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // POST route to save the application and related files
-router.post("/application", upload.fields([
+router.post("/application",
+   upload.fields([
   { name: "addressProof", maxCount: 1 },
   { name: "dobProof", maxCount: 1 },
   { name: "casteProof", maxCount: 1 }
-]), async (req, res) => {
+]), 
+async (req, res) => {
   try {
-    // Extract data from request
-    const { firstname, lastname, email, phone, aadharID, caste, addressDetails } = req.body;
-    const { pincode, state, village, district, mandal } = addressDetails;
+    // Extract fields from the request body
+    const {
+      full_name,
+      dob,
+      gender,
+      religion,
+      caste,
+      sub_caste,
+      parent_religion,
+      parent_guardian_type,
+      parent_guardian_name,
+      marital_status,
+      aadhar_num,
+      phone_num,
+      email,
+      addressDetails,
+    } = req.body;
 
-    if (!pincode || !state || !village || !district || !mandal) {
+    const { pincode, state,  district, mandal, address, sachivalayam } = addressDetails;
+
+    // Validate required fields
+    if (!full_name || !dob || !gender || !religion || !marital_status || !aadhar_num || !phone_num || !email || !addressDetails) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Validate address details
+    if (!pincode || !state || !district || !mandal) {
       return res.status(400).json({ message: "Incomplete address details" });
     }
 
-    console.log(pincode, state, village, mandal, district)
-
-    const vro = await prisma.vRO.findFirst({
-      where: { pincode, state, village, district, mandal },
-      select: { id: true },
+    // Create the address record
+    const addressRecord = await prisma.address.create({
+      data:{
+         mandal, state, district, address, pincode, sachivalayam
+      }
     });
 
-    if (!vro) {
-      return res.status(404).json({ message: "No VRO found for the provided address details" });
+    // Fetch or validate the caste
+    const casteRecord = caste ? await prisma.caste.findUnique({
+      where: { caste_type: caste },
+      select: { caste_id: true }
+    }) : null;
+
+    if (caste && !casteRecord) {
+      return res.status(400).json({ message: "Invalid caste provided" });
     }
 
-    // Save address details in the Address table
-    const address = await prisma.address.create({
-      data: { village, mandal, pincode, address: addressDetails.address, state, district },
+    // Validate parent guardian type
+    const parentGuardianTypeRecord = await prisma.parentGuardianType.findUnique({
+      where: { type: parent_guardian_type },
+      select: { id: true }
     });
 
-    // Save proof files and find the corresponding type IDs
+    if (!parentGuardianTypeRecord) {
+      return res.status(400).json({ message: "Invalid parent guardian type" });
+    }
+
+    // Handle proof files
     const addressProofFile = req.files["addressProof"] ? req.files["addressProof"][0] : null;
     const dobProofFile = req.files["dobProof"] ? req.files["dobProof"][0] : null;
     const casteProofFile = req.files["casteProof"] ? req.files["casteProof"][0] : null;
 
-    const addressProofType = req.body.addressProofType.toUpperCase();
-    const dobProofType = req.body.dobProofType.toUpperCase();
-    const casteProofType = req.body.casteProofType.toUpperCase();
-
-    // Fetch the type IDs
-    const addressProofTypeId = await prisma.addressProofType.findUnique({
-      where: { type: addressProofType },
-      select: { id: true },
-    });
-
-    const dobProofTypeId = await prisma.dobProofType.findUnique({
-      where: { type: dobProofType },
-      select: { id: true },
-    });
-
-    const casteProofTypeId = await prisma.casteProofType.findUnique({
-      where: { type: casteProofType },
-      select: { id: true },
-    });
-
-    console.log(caste, " is teh caste")
-    const caste2 = caste ? await prisma.caste.findUnique({
-      where: {
-        type: caste
-      },
-      select: {
-        id: true
+    const addressProof = addressProofFile ? await prisma.addressProof.create({
+      data: {
+        typeId: parseInt(addressProofTypeId), // Ensure typeId is provided and valid
+        filepath: `/uploads/${addressProofFile.filename}`
       }
     }) : null;
 
-    console.log(casteProofTypeId, dobProofTypeId, addressProofTypeId, caste2, " are the id's")
+    const dobProof = dobProofFile ? await prisma.dobProof.create({
+      data: {
+        typeId: dobProofTypeId, // Ensure typeId is valid for DobProofType
+        filepath: `/uploads/${dobProofFile.filename}`
+      }
+    }) : null;
 
-    if (!addressProofTypeId || !dobProofTypeId || !casteProofTypeId) {
-      return res.status(400).json({ message: "Invalid proof type provided" });
+    const casteProof = casteProofFile ? await prisma.casteProof.create({
+      data: {
+        typeId: casteProofTypeId, // Ensure typeId is valid for CasteProofType
+        filepath: `/uploads/${casteProofFile.filename}`
+      }
+    }) : null;
+
+  
+    if (!addressProofFile || !dobProof || !casteProof) {
+      return res.status(400).json({ message: "Address proof file is required" });
+    }     
+
+    //get the svro
+
+    console.log(pincode, mandal, sachivalayam, "are the address details")
+    const svro = await prisma.sVRO.findFirst({
+      where:{
+        pincode: pincode,
+        mandal: mandal,
+        sachivalayam : sachivalayam,
+      },
+      select:{
+        svro_id:true,
+        user_id: true
+      }
+    })
+    const mvro = await prisma.mVRO.findFirst({
+      where:{
+        pincode: pincode,
+        mandal: mandal,
+        sachivalayam : sachivalayam,
+      },
+      select:{
+        mvro_id:true,
+        user_id: true
+      }
+    })
+    if (!svro || !mvro) {
+      return res.status(404).json({ message: "SVRO or MVRO not found for the provided address details" });
     }
-
-    // Upsert for addressProof
-    const addressProof = addressProofFile ? await prisma.addressProof.upsert({
-      where: {
-        typeId: addressProofTypeId.id,  // Use the type ID to check if the record exists
-      },
-      update: {
-        file: `/uploads/${addressProofFile.filename}`,  // Update file if it exists
-      },
-      create: {
-        typeId: addressProofTypeId.id,  // Create with the appropriate type ID
-        file: `/uploads/${addressProofFile.filename}`,  // Set the file path
-      },
-    }) : null;
-
-    // Upsert for dobProof
-    const dobProof = dobProofFile ? await prisma.dobProof.upsert({
-      where: {
-        typeId: dobProofTypeId.id,  // Use the type ID to check if the record exists
-      },
-      update: {
-        file: `/uploads/${dobProofFile.filename}`,  // Update file if it exists
-      },
-      create: {
-        typeId: dobProofTypeId.id,  // Create with the appropriate type ID
-        file: `/uploads/${dobProofFile.filename}`,  // Set the file path
-      },
-    }) : null;
-
-    // Upsert for casteProof
-    const casteProof = casteProofFile ? await prisma.casteProof.upsert({
-      where: {
-        typeId: casteProofTypeId.id,  // Use the type ID to check if the record exists
-      },
-      update: {
-        file: `/uploads/${casteProofFile.filename}`,  // Update file if it exists
-      },
-      create: {
-        typeId: casteProofTypeId.id,  // Create with the appropriate type ID
-        file: `/uploads/${casteProofFile.filename}`,  // Set the file path
-      },
-    }) : null;
-
-    console.log(casteProof, dobProof, addressProof, " are the id's")
-
-    // Save the application along with the foreign keys to the proof files and address
+    
+    // Create the application
     const application = await prisma.application.create({
       data: {
-        firstname,
-        lastname,
+        full_name,
+        dob: new Date(dob),
+        gender,
+        religion,
+        sub_caste,
+        parent_religion,
+        parent_guardian_type: { connect: { id: parentGuardianTypeRecord.id } },
+        parent_guardian_name,
+        marital_status,
+        aadhar_num,
+        phone_num,
         email,
-        phone,
-        aadharID,
-        vroId: vro.id,  // connecting to VRO
-        caste: caste2 ? {
-          connect: { id: caste2.id }  // ensure caste is connected properly
-        } : undefined,
-        dobProof: dobProof ? { connect: { id: dobProof.id } } : undefined,
-        casteProof: casteProof ? { connect: { id: casteProof.id } } : undefined,
-        addressProof: addressProof ? { connect: { id: addressProof.id } } : undefined,
+        current_stage: 3,
+        current_user_id: svro? svro.user_id:null,
+        mvro_user_id: mvro? mvro.mvro_id:null,
+        svro_user_id: svro? svro.svro_id:null,
+        address_id: addressRecord.address_id,
+        caste_id: casteRecord ? casteRecord.caste_id : null,
+        addressProof_id: addressProof ? addressProof.id : null,
+        dobProof_id: dobProof ? dobProof.id : null,
+        casteProof_id: casteProof ? casteProof.id : null,
         status: "PENDING",
-        applicationDate: new Date(),
-      },
+        created_at: new Date()
+      }
     });
 
-
-    return res.status(200).json({ message: "Application created successfully", application });
+    return res.status(201).json({
+      message: "Application created successfully",
+      application
+    });
   } catch (error) {
     console.error("Error creating application:", error);
-    return res.status(500).json({ message: "Something went wrong" });
+    return res.status(500).json({ message: "Something went wrong", error: error.message });
   }
 });
 
-router.get("/getAllLocationDetails", async (req, res) => {
-  try {
-    const vroDetails = await prisma.vRO.findMany({
-      select: {
-        pincode: true,
-        state: true,
-        district: true,
-        mandal: true,
-        village: true,
+router.get("/particular_application/:app_id", async(req,res)=>{
+  try{
+    const particular_application = prisma.application.findFirst({
+      where:{
+        application_id: req.params.app_id
       },
-    });
+      include:{
 
-    if (vroDetails.length === 0) {
-      return res.status(404).json({ message: "No location data found" });
-    }
-    return res.status(200).json(vroDetails);
-  } catch (error) {
-    console.error("Error fetching location details:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+      }
+    })
   }
-});
-
-
-
-router.get('/getVroApplication', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ "message": "No token provided" });
-    }
-
-    // Extract the token
-    const token = authHeader.split(" ")[1];
-
-    // Decode and verify the token
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return res.status(400).json({ "message": "Token is expired or invalid" });
-    }
-    const id = decoded.id
-    const vro = prisma.vRO.findFirst({
-      where: {
-        id: decoded.id
-      }
-    })
-    const applications = prisma.application.findMany({
-      where: {
-        id: id
-      }
-    })
-    if (!applications) {
-      return res.status(200).json({ "message": "There are no applicaitons" })
-    }
-    return res.status()
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Something went wrong" });
+  catch(e){
+    console.log(e);
+    return res.status(400).json({"message":"There is an error"})
   }
 })
 
-module.exports = router;
+router.post("send-back/:app_id", async (req,res)=>{
+  try{
+    const token = req.header.token
+    
+  }
+  catch(e){
+    console.log(e);
+    res.status(400).json({"message":"There is an error in the backend"})
+  }
+})
+
+// router.get("/getAllLocationDetails", async (req, res) => {
+//   try {
+//     const vroDetails = await prisma.vRO.findMany({
+//       select: {
+//         pincode: true,
+//         state: true,
+//         district: true,
+//         mandal: true,
+//       },
+//     });
+
+//     if (vroDetails.length === 0) {
+//       return res.status(404).json({ message: "No location data found" });
+//     }
+//     return res.status(200).json(vroDetails);
+//   } catch (error) {
+//     console.error("Error fetching location details:", error);
+//     return res.status(500).json({ message: "Internal Server Error" });
+//   }
+// });
+
+
+
+// router.get('/getVroApplication', async (req, res) => {
+//   try {
+//     const authHeader = req.headers.authorization;
+
+//     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+//       return res.status(401).json({ "message": "No token provided" });
+//     }
+
+//     // Extract the token
+//     const token = authHeader.split(" ")[1];
+
+//     // Decode and verify the token
+//     const decoded = verifyToken(token);
+
+//     if (!decoded) {
+//       return res.status(400).json({ "message": "Token is expired or invalid" });
+//     }
+//     const id = decoded.id
+//     const vro = prisma.vRO.findFirst({
+//       where: {
+//         id: decoded.id
+//       }
+//     })
+//     const applications = prisma.application.findMany({
+//       where: {
+//         id: id
+//       }
+//     })
+//     if (!applications) {
+//       return res.status(200).json({ "message": "There are no applicaitons" })
+//     }
+//     return res.status()
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ message: "Something went wrong" });
+//   }
+// })
+
+// module.exports = router;
