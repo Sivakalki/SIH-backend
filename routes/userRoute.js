@@ -78,8 +78,8 @@ router.post("/signup", async (req, res) => {
         role_id: role.role_id,
       },
     });
-    const generatedToken = generateToken({ username: users.username, email: users.email })
-    return res.status(201).json({ message: "Applicant created successfully!", user, token:generatedToken });
+    const generatedToken = generateToken({ username: user.username, email: user.email })
+    return res.status(200).json({ message: "Applicant created successfully!", user, token:generatedToken });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
