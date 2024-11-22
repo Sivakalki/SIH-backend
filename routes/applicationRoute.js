@@ -318,26 +318,27 @@ router.put("/edit_application/:app_id", async (req, res) => {
 
 
 
-// router.get("/getAllLocationDetails", async (req, res) => {
-//   try {
-//     const vroDetails = await prisma.vRO.findMany({
-//       select: {
-//         pincode: true,
-//         state: true,
-//         district: true,
-//         mandal: true,
-//       },
-//     });
+router.get("/getAllLocationDetails", async (req, res) => {
+  try {
+    const vroDetails = await prisma.sVRO.findMany({
+      select: {
+        pincode: true,
+        state: true,
+        district: true,
+        mandal: true,
+        sachivalayam: true,
+      },
+    });
 
-//     if (vroDetails.length === 0) {
-//       return res.status(404).json({ message: "No location data found" });
-//     }
-//     return res.status(200).json(vroDetails);
-//   } catch (error) {
-//     console.error("Error fetching location details:", error);
-//     return res.status(500).json({ message: "Internal Server Error" });
-//   }
-// });
+    if (vroDetails.length === 0) {
+      return res.status(400).json({ message: "No location data found" });
+    }
+    return res.status(200).json(vroDetails);
+  } catch (error) {
+    console.error("Error fetching location details:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
 
 

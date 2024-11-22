@@ -170,6 +170,7 @@ model RI {
 
 model MRO {
   mro_id    Int    @id @default(autoincrement())
+  mandal String
   state     String
   district  String
   user      User   @relation(fields: [user_id], references: [user_id])

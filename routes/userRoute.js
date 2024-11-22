@@ -37,6 +37,53 @@ router.post('/login', async (req, res) => {
     }
     
 })
+router.post("/signup/admin", async (req, res) => {
+  try {
+    const { email, username, password, confirm_password, phone } = req.body;
+
+    // Validate passwords
+    if (password !== confirm_password) {
+      return res.status(400).json({ message: "Passwords do not match." });
+    }
+    
+    // Check if the user already exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { name: username }],
+      },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists with this email or username." });
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPwd(password);
+
+    // Get applicant role ID
+    const role = await prisma.role.findFirst({
+      where: { role_type: "ADMIN" },
+      select: { role_id: true },
+    });
+
+    console.log(role,"is the role")
+    // Create the applicant user
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: username,
+        password: hashedPassword,
+        phone,
+        role_id: role.role_id,
+      },
+    });
+    const generatedToken = generateToken({ username: user.username, email: user.email })
+    return res.status(200).json({ message: "Applicant created successfully!", user, token:generatedToken });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+});
 
 router.post("/signup", async (req, res) => {
   try {
@@ -130,7 +177,7 @@ router.post("/signup/svro", async (req, res) => {
 
     // Get SVRO role ID
     const role = await prisma.role.findFirst({
-      where: { role_type: "svro" },
+      where: { role_type: "SVRO" },
       select: { role_id: true },
     });
 
@@ -146,10 +193,9 @@ router.post("/signup/svro", async (req, res) => {
 
     // Fetch all MVROs for the given mandal with their assigned Sachivalayams
     const mvros = await prisma.mVRO.findMany({
-      where: { mandal },
+      where: { mandal ,type:"PERMANENT"},
       include: {
         sachivalayams: true, // Include related Sachivalayams
-        type: "PERMANENT"
       },
     });
 
@@ -194,7 +240,7 @@ router.post("/signup/ri", async (req, res) => {
 
     const hashedPassword = await hashPwd(password);
 
-    const role = await prisma.role.findFirst({ where: { role_type: "ri" }, select: { role_id: true } });
+    const role = await prisma.role.findFirst({ where: { role_type: "RI" }, select: { role_id: true } });
 
     const user = await prisma.user.create({
       data: { email, name: username, password: hashedPassword, phone, role_id: role.role_id },
@@ -223,7 +269,7 @@ router.post("/signup/mro", async (req, res) => {
 
     const hashedPassword = await hashPwd(password);
 
-    const role = await prisma.role.findFirst({ where: { role_type: "mro" }, select: { role_id: true } });
+    const role = await prisma.role.findFirst({ where: { role_type: "MRO" }, select: { role_id: true } });
 
     const user = await prisma.user.create({
       data: { email, name: username, password: hashedPassword, phone, role_id: role.role_id },
@@ -285,6 +331,44 @@ router.get("/user", async (req, res) => {
         return res.status(500).json({ message: "Something went wrong" });
     }
 });
+
+router.get("/all_users", async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where:{
+        role:{
+            role_type: {
+              not: "ADMIN"
+            }
+        }
+      },
+      select: {
+        name: true,
+        email: true,
+        user_id: true,
+        role: {
+          select: {
+            role_type: true, // Assuming the role table has a field `role_type`
+          },
+        },
+      },
+    });
+
+    // Transform the data if necessary
+    const formattedUsers = users.map(user => ({
+      name: user.name,
+      email: user.email,
+      user_id: user.user_id,
+      role_type: user.role.role_type, // Access the role_type directly
+    }));
+
+    return res.status(200).json(formattedUsers);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    return res.status(500).json({ error: "An error occurred while fetching users." });
+  }
+});
+
 
 module.exports = router; 
 
