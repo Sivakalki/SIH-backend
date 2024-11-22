@@ -27,7 +27,9 @@ model User {
   svro SVRO[]
   mvro MVRO[]
   mro MRO[]
-  Application Application[]
+  Application Application[] @relation("ApplicationsAppliedBy")
+
+  Application2 Application[] @relation("ApplicationsCurrentUser")
 }
 
 model Role {
@@ -57,6 +59,8 @@ model Caste {
 
 model Application {
   application_id        Int        @id @default(autoincrement())
+  applied_by_id Int 
+  applied_by User @relation("ApplicationsAppliedBy", fields: [applied_by_id], references: [user_id])
   full_name             String
   dob                   DateTime
   gender                GENDER
@@ -82,7 +86,7 @@ model Application {
   email                 String
   status              STATUS
   current_user_id    Int?
-  current_user       User?       @relation(fields: [current_user_id], references: [user_id])
+  current_user       User?       @relation("ApplicationsCurrentUser",fields: [current_user_id], references: [user_id])
   mvro_user_id       Int
   mvro_user          MVRO      @relation(fields: [mvro_user_id], references: [user_id])
   svro_user_id       Int
@@ -95,6 +99,8 @@ model Application {
   report Report[]
   counter Int @default(0)
   rejection_reason String?
+
+  reCheck ReCheck[]
 }
 
 
@@ -226,6 +232,13 @@ model ParentGuardianType{
   Application Application[]
 }
 
+model ReCheck{
+  id Int @id @default(autoincrement())
+  description String
+  application_id Int
+  application Application @relation(fields: [application_id], references: [application_id])
+}
+
 enum STATUS{
   PENDING
   COMPLETED
@@ -244,6 +257,6 @@ enum MARITAL{
 }
 
 enum MVROTYPE{
-  PERMENANT
+  PERMANENT
   TEMPORARY
 }

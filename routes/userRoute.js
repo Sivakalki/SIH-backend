@@ -5,6 +5,7 @@ const { hashPwd, comparePwd } = require("../utils/passwordHash");
 const { generateToken, verifyToken } = require("../utils/tokenUtils");
 const { response } = require("..");
 const { verify } = require("jsonwebtoken");
+const e = require("express");
 
 
 router.get('/', (req, res) => { // Define the route
@@ -26,7 +27,7 @@ router.post('/login', async (req, res) => {
         let passwordMatch = await comparePwd(req.body.password, hashedPassword)
         // console.log(passwordMatch)
         if (passwordMatch) {
-            const generatedToken = generateToken({ username: users.username, email: users.email })
+            const generatedToken = generateToken({ name: users.name, email: users.email })
             return res.status(200).json({ "message": "Succesfully logged in", token: generatedToken ,data:users})
         }
         return res.status(400).json({ "message": "Wrong Password" })
@@ -66,6 +67,7 @@ router.post("/signup", async (req, res) => {
       select: { role_id: true },
     });
 
+    console.log(role,"is the role")
     // Create the applicant user
     const user = await prisma.user.create({
       data: {
@@ -76,8 +78,8 @@ router.post("/signup", async (req, res) => {
         role_id: role.role_id,
       },
     });
-
-    return res.status(201).json({ message: "Applicant created successfully!", user });
+    const generatedToken = generateToken({ username: users.username, email: users.email })
+    return res.status(201).json({ message: "Applicant created successfully!", user, token:generatedToken });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
@@ -147,6 +149,7 @@ router.post("/signup/svro", async (req, res) => {
       where: { mandal },
       include: {
         sachivalayams: true, // Include related Sachivalayams
+        type: "PERMANENT"
       },
     });
 
@@ -257,16 +260,26 @@ router.get("/user", async (req, res) => {
         }
         console.log(decoded);
         // Fetch the user data using the ID from the decoded token
+        
         const user = await prisma.user.findUnique({
             where: { email: decoded.email },
-            select: { id: true, username: true, email: true, role:true } // Select only required fields
+            select: { user_id: true, name: true, email: true, role_id:true } // Select only required fields
         });
+
+        const role = await prisma.role.findFirst({
+          where:{
+            role_id:user.role_id
+          },
+          select:{
+            role_type:true  
+          }
+        })
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        return res.status(200).json(user);
+        return res.status(200).json({user,role:role.role_type});
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: "Something went wrong" });
