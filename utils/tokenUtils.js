@@ -3,7 +3,7 @@ const dotenv = require("dotenv")
 dotenv.config({})
 
 const secretkey = process.env.JWT_SECRET
-const expireDuration = 1 *60*60
+const expireDuration = 2*60*60
 const generateToken=(claims)=>{
     return jwt.sign(claims,secretkey,{expiresIn: expireDuration})
 }

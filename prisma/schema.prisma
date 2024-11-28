@@ -29,7 +29,7 @@ model User {
   mro MRO[]
   Application Application[] @relation("ApplicationsAppliedBy")
 
-  Application2 Application[] @relation("ApplicationsCurrentUser")
+  // Application2 Application[] @relation("ApplicationsCurrentUser")
 }
 
 model Role {
@@ -74,23 +74,27 @@ model Application {
   parent_guardian_name  String
   address_id            Int        @unique
   address               Address    @relation(fields: [address_id], references: [address_id])
-  addressProof_id       Int    @unique
-  addressProof          AddressProof @relation(fields: [addressProof_id], references: [id])
-  casteProof_id         Int @unique
-  casteProof            CasteProof  @relation(fields: [casteProof_id], references: [id])
-  dobProof_id           Int @unique
-  dobProof              DobProof @relation(fields: [dobProof_id], references: [id])
+  addressProof_id       Int?    @unique
+  addressProof          AddressProof? @relation(fields: [addressProof_id], references: [id])
+  casteProof_id         Int? @unique
+  casteProof            CasteProof?  @relation(fields: [casteProof_id], references: [id])
+  dobProof_id           Int? @unique
+  dobProof              DobProof? @relation(fields: [dobProof_id], references: [id])
   marital_status        MARITAL
   aadhar_num            String  @unique
   phone_num             String  
   email                 String
   status              STATUS
-  current_user_id    Int?
-  current_user       User?       @relation("ApplicationsCurrentUser",fields: [current_user_id], references: [user_id])
+  // current_user_id    Int?
+  // current_user       User?       @relation("ApplicationsCurrentUser",fields: [current_user_id], references: [user_id])
   mvro_user_id       Int
-  mvro_user          MVRO      @relation(fields: [mvro_user_id], references: [user_id])
+  mvro_user          MVRO?      @relation(fields: [mvro_user_id], references: [user_id])
   svro_user_id       Int
-  svro_user          SVRO      @relation(fields: [svro_user_id], references: [user_id])
+  svro_user          SVRO?      @relation(fields: [svro_user_id], references: [user_id])
+  ri_user_id          Int
+  ri_user         RI? @relation(fields: [ri_user_id], references: [ri_id])
+  mro_user_id     Int
+  mro_user        MRO? @relation(fields: [mro_user_id],references: [mro_id])
   current_stage_id        Int?
   current_stage   Role? @relation(fields: [current_stage_id], references: [role_id])
   created_at            DateTime   @default(now())
@@ -152,7 +156,7 @@ model MVRO {
 
 model Sachivalayam {
   sachivalayam_id Int   @id @default(autoincrement())
-  name            String
+  name            String @unique
   mvro_id         Int
   mvro            MVRO  @relation(fields: [mvro_id], references: [mvro_id])
 
@@ -166,6 +170,8 @@ model RI {
   mandal    String
   user      User   @relation(fields: [user_id], references: [user_id])
   user_id   Int @unique
+
+  Application Application[]
 }
 
 model MRO {
@@ -175,6 +181,8 @@ model MRO {
   district  String
   user      User   @relation(fields: [user_id], references: [user_id])
   user_id   Int @unique
+
+  Application Application[]
 }
 
 model AddressProofType {

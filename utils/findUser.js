@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken'); // Assuming you're using JWT for token handling
+const prisma = require('../prisma/prisma');
 
 // Your secret key used to sign the JWTs
 const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key';
@@ -26,6 +27,20 @@ const getUserFromToken = (authorizationHeader) => {
     }
 };
 
+const fetchRole=async (role_id)=>{
+    const role = await prisma.role.findFirst({
+        where:{
+            role_id:role_id
+        },
+        select:{
+            role_type:true
+        }
+    })
+    console.log(role, " is called")
+    return role.role_type
+}
+
 module.exports = {
     getUserFromToken,
+    fetchRole,
 };

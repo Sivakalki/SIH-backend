@@ -3,39 +3,40 @@ const router = express.Router(); // Initialize the router
 const prisma = require('../prisma/prisma')
 const { hashPwd, comparePwd } = require("../utils/passwordHash");
 const { generateToken, verifyToken } = require("../utils/tokenUtils");
-const { response } = require("..");
-const { verify } = require("jsonwebtoken");
-const e = require("express");
+const { fetchRole } = require("../utils/findUser");
 
 
 router.get('/', (req, res) => { // Define the route
-    res.status(200).send("Hello");
+  res.status(200).send("Hello");
 });
 
 router.post('/login', async (req, res) => {
-    try {
-        const users = await prisma.user.findFirst({
-            where: {
-                email: req.body.email
-            }
-        }
-        )
-        if (!users) {
-            return res.status(404).json({ "message": "User doesn't exist" })
-        }
-        let hashedPassword = users.password
-        let passwordMatch = await comparePwd(req.body.password, hashedPassword)
-        // console.log(passwordMatch)
-        if (passwordMatch) {
-            const generatedToken = generateToken({ name: users.name, email: users.email })
-            return res.status(200).json({ "message": "Succesfully logged in", token: generatedToken ,data:users})
-        }
-        return res.status(400).json({ "message": "Wrong Password" })
-        
-    } catch (error) {
-        console.log(error)
+  try {
+    const users = await prisma.user.findFirst({
+      where: {
+        email: req.body.email
+      }
     }
-    
+    )
+    if (!users) {
+      return res.status(404).json({ "message": "User doesn't exist" })
+    }
+    let hashedPassword = users.password
+    let passwordMatch = await comparePwd(req.body.password, hashedPassword)
+    // console.log(passwordMatch)
+
+    if (passwordMatch) {
+      const generatedToken = generateToken({ name: users.name, email: users.email })
+      const role = await fetchRole(users.role_id)
+      console.log("role is ", role)
+      return res.status(200).json({ "message": "Succesfully logged in", token: generatedToken, data: users, role: role })
+    }
+    return res.status(400).json({ "message": "Wrong Password" })
+
+  } catch (error) {
+    console.log(error)
+  }
+
 })
 router.post("/signup/admin", async (req, res) => {
   try {
@@ -45,7 +46,7 @@ router.post("/signup/admin", async (req, res) => {
     if (password !== confirm_password) {
       return res.status(400).json({ message: "Passwords do not match." });
     }
-    
+
     // Check if the user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
@@ -66,7 +67,7 @@ router.post("/signup/admin", async (req, res) => {
       select: { role_id: true },
     });
 
-    console.log(role,"is the role")
+    console.log(role, "is the role")
     // Create the applicant user
     const user = await prisma.user.create({
       data: {
@@ -78,7 +79,7 @@ router.post("/signup/admin", async (req, res) => {
       },
     });
     const generatedToken = generateToken({ username: user.username, email: user.email })
-    return res.status(200).json({ message: "Applicant created successfully!", user, token:generatedToken });
+    return res.status(200).json({ message: "Applicant created successfully!", user, token: generatedToken });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
@@ -93,7 +94,7 @@ router.post("/signup", async (req, res) => {
     if (password !== confirm_password) {
       return res.status(400).json({ message: "Passwords do not match." });
     }
-    
+
     // Check if the user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
@@ -114,7 +115,7 @@ router.post("/signup", async (req, res) => {
       select: { role_id: true },
     });
 
-    console.log(role,"is the role")
+    console.log(role, "is the role")
     // Create the applicant user
     const user = await prisma.user.create({
       data: {
@@ -126,7 +127,7 @@ router.post("/signup", async (req, res) => {
       },
     });
     const generatedToken = generateToken({ username: user.username, email: user.email })
-    return res.status(200).json({ message: "Applicant created successfully!", user, token:generatedToken });
+    return res.status(200).json({ message: "Applicant created successfully!", user, token: generatedToken });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
@@ -147,14 +148,31 @@ router.post("/signup/mvro", async (req, res) => {
     const role = await prisma.role.findFirst({ where: { role_type: "MVRO" }, select: { role_id: true } });
 
     const user = await prisma.user.create({
-      data: { email, name: username, password: hashedPassword, phone, role_id: role.role_id },
+      data: {
+        email,
+        name: username,
+        password: hashedPassword,
+        phone,
+        role_id: role.role_id,
+        mvro: {
+          create:{
+              mandal,
+              district,
+              state,
+              type
+          }
+        }
+      },
+      include:{
+        mvro:true,
+      }
     });
 
-    const relatedData = await prisma.mVRO.create({
-      data: { mandal, district, state, type, user: { connect: { user_id: user.user_id } } },
-    });
+    // const relatedData = await prisma.mVRO.create({
+    //   data: { mandal, district, state, type, user: { connect: { user_id: user.user_id } } },
+    // });
 
-    return res.status(201).json({ message: "MVRO user created successfully!", user, relatedData });
+    return res.status(201).json({ message: "MVRO user created successfully!", user });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
@@ -183,17 +201,37 @@ router.post("/signup/svro", async (req, res) => {
 
     // Create the SVRO user
     const user = await prisma.user.create({
-      data: { email, name: username, password: hashedPassword, phone, role_id: role.role_id },
-    });
+      data: {
+        email,
+        name: username,
+        password: hashedPassword,
+        phone,
+        role_id: role.role_id,
+        svro: {
+          create:{
+            pincode,
+            state,
+            district,
+            mandal,
+            sachivalayam
+          }
+        }
+      },
+      include: {
+        svro: true,
+      }
 
-    // Create the SVRO data
-    const svro = await prisma.sVRO.create({
-      data: { pincode, state, district, mandal, sachivalayam, user: { connect: { user_id: user.user_id } } },
     });
+    const svro = user.svro
+
+    // // Create the SVRO data
+    // const svro = await prisma.sVRO.create({
+    //   data: { pincode, state, district, mandal, sachivalayam, user: { connect: { user_id: user.user_id } } },
+    // });
 
     // Fetch all MVROs for the given mandal with their assigned Sachivalayams
     const mvros = await prisma.mVRO.findMany({
-      where: { mandal ,type:"PERMANENT"},
+      where: { mandal, type: "PERMANENT" },
       include: {
         sachivalayams: true, // Include related Sachivalayams
       },
@@ -243,14 +281,27 @@ router.post("/signup/ri", async (req, res) => {
     const role = await prisma.role.findFirst({ where: { role_type: "RI" }, select: { role_id: true } });
 
     const user = await prisma.user.create({
-      data: { email, name: username, password: hashedPassword, phone, role_id: role.role_id },
+      data: {
+        email,
+        name: username,
+        password: hashedPassword,
+        phone,
+        role_id: role.role_id,
+        ri: {
+          create: {
+            mandal,
+            state,
+            district
+          }
+        }
+      },
     });
 
-    const relatedData = await prisma.rI.create({
-      data: { mandal, state, district, user: { connect: { user_id: user.user_id } } },
-    });
+    // const relatedData = await prisma.rI.create({
+    //   data: { mandal, state, district, user: { connect: { user_id: user.user_id } } },
+    // });
 
-    return res.status(201).json({ message: "RI user created successfully!", user, relatedData });
+    return res.status(201).json({ message: "RI user created successfully!", user });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
@@ -272,14 +323,30 @@ router.post("/signup/mro", async (req, res) => {
     const role = await prisma.role.findFirst({ where: { role_type: "MRO" }, select: { role_id: true } });
 
     const user = await prisma.user.create({
-      data: { email, name: username, password: hashedPassword, phone, role_id: role.role_id },
+      data: {
+        email,
+        name: username,
+        password: hashedPassword,
+        phone,
+        role_id: role.role_id,
+        mro: {
+          create: {
+            mandal,
+            district,
+            state
+          }
+        }
+      },
+      include: {
+        mro: true,
+      }
     });
 
-    const relatedData = await prisma.mRO.create({
-      data: { mandal, district, state, user: { connect: { user_id: user.user_id } } },
-    });
+    // const relatedData = await prisma.mRO.create({
+    //   data: { mandal, district, state, user: { connect: { user_id: user.user_id } } },
+    // });
 
-    return res.status(201).json({ message: "MRO user created successfully!", user, relatedData });
+    return res.status(201).json({ message: "MRO user created successfully!", user });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error." });
@@ -288,58 +355,58 @@ router.post("/signup/mro", async (req, res) => {
 
 
 router.get("/user", async (req, res) => {
-    try {
-        const authHeader = req.headers.authorization;
+  try {
+    const authHeader = req.headers.authorization;
 
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ "message": "No token provided" });
-        }
-
-        // Extract the token
-        const token = authHeader.split(" ")[1];
-
-        // Decode and verify the token
-        const decoded = verifyToken(token);
-
-        if (!decoded) {
-            return res.status(400).json({ "message": "Token is expired or invalid" });
-        }
-        console.log(decoded);
-        // Fetch the user data using the ID from the decoded token
-        
-        const user = await prisma.user.findUnique({
-            where: { email: decoded.email },
-            select: { user_id: true, name: true, email: true, role_id:true } // Select only required fields
-        });
-
-        const role = await prisma.role.findFirst({
-          where:{
-            role_id:user.role_id
-          },
-          select:{
-            role_type:true  
-          }
-        })
-
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        return res.status(200).json({user,role:role.role_type});
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: "Something went wrong" });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ "message": "No token provided" });
     }
+
+    // Extract the token
+    const token = authHeader.split(" ")[1];
+
+    // Decode and verify the token
+    const decoded = verifyToken(token);
+
+    if (!decoded) {
+      return res.status(400).json({ "message": "Token is expired or invalid" });
+    }
+    console.log(decoded);
+    // Fetch the user data using the ID from the decoded token
+
+    const user = await prisma.user.findUnique({
+      where: { email: decoded.email },
+      select: { user_id: true, name: true, email: true, role_id: true } // Select only required fields
+    });
+
+    const role = await prisma.role.findFirst({
+      where: {
+        role_id: user.role_id
+      },
+      select: {
+        role_type: true
+      }
+    })
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({ user, role: role.role_type });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
 });
 
 router.get("/all_users", async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      where:{
-        role:{
-            role_type: {
-              not: "ADMIN"
-            }
+      where: {
+        role: {
+          role_type: {
+            not: "ADMIN"
+          }
         }
       },
       select: {
@@ -370,7 +437,7 @@ router.get("/all_users", async (req, res) => {
 });
 
 
-module.exports = router; 
+module.exports = router;
 
 
 
@@ -407,7 +474,7 @@ module.exports = router;
 //     let relatedData = null;
 
 //     switch (roleId) {
-//       case 3: 
+//       case 3:
 //         if (!rest.pincode || !rest.state || !rest.district || !rest.mandal || !rest.sachivalayam) {
 //           return res.status(400).json({
 //             message: "Pincode, state, district, mandal, and sachivalayam are required for SVRO role."
@@ -415,7 +482,7 @@ module.exports = router;
 //         }
 //         break;
 
-//       case 4: 
+//       case 4:
 //         if (!rest.village || !rest.mandal || !rest.district || !rest.state || !rest.pincode) {
 //           return res.status(400).json({
 //             message: "Village, mandal, district, pincode, and state are required for MVRO role."
@@ -423,7 +490,7 @@ module.exports = router;
 //         }
 //         break;
 
-//       case 5: 
+//       case 5:
 //         if (!rest.region || !rest.state || !rest.district) {
 //           return res.status(400).json({
 //             message: "Region, state, and district are required for RI role."
@@ -431,7 +498,7 @@ module.exports = router;
 //         }
 //         break;
 
-//       case 6: 
+//       case 6:
 //         if (!rest.mandal || !rest.district || !rest.state) {
 //           return res.status(400).json({
 //             message: "Mandal, district, and state are required for MRO role."
@@ -455,7 +522,7 @@ module.exports = router;
 //       });
 
 //       switch (roleId) {
-//         case 3: 
+//         case 3:
 //           relatedData = await prisma.sVRO.create({
 //             data: {
 //               pincode: rest.pincode,
@@ -468,7 +535,7 @@ module.exports = router;
 //           });
 //           break;
 
-//         case 4: 
+//         case 4:
 //           relatedData = await prisma.mVRO.create({
 //             data: {
 //               mandal: rest.mandal,
@@ -482,7 +549,7 @@ module.exports = router;
 //           });
 //           break;
 
-//         case 5: 
+//         case 5:
 //           relatedData = await prisma.rI.create({
 //             data: {
 //               region: rest.region,
@@ -493,7 +560,7 @@ module.exports = router;
 //           });
 //           break;
 
-//         case 6: 
+//         case 6:
 //           relatedData = await prisma.mRO.create({
 //             data: {
 //               mandal: rest.mandal,
