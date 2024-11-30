@@ -164,11 +164,6 @@ async function main() {
       type: "SIBLING"
     }
   })
-  // console.log({ aadhaar, electricity, gas })
-  // const data = await prisma.sachivalayam.deleteMany({})
-  // const mvro = await prisma.mVRO.deleteMany
-  // const data2 = await prisma.user.deleteMany({})
-  // console.log(data)
 }
   
 main()

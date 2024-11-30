@@ -331,12 +331,19 @@ router.post("/application",
                 reCheck: true, // Include reCheck details
             },
         });
-        console.log(parseInt(app_id), " is the requested application")
+        const report = await prisma.report.findFirst({
+          where:{
+            application_id: parseInt(app_id)
+          },
+          select:{
+            report_id:true
+          }
+        })
+        console.log(report, " is the report")
         if (!application) {
             return res.status(404).json({ message: "Application not found" });
         }
-
-        return res.status(200).json({ data: application });
+        return res.status(200).json({ data: application, "report":report });
     }
     catch (e) {
         console.log(e);
@@ -396,7 +403,21 @@ router.put("/edit_application/:app_id", async (req, res) => {
   }
 });
 
-
+router.get("/check_aadhaar/:aadhar_num",async (req,res)=>{
+  const aadhar = (req.params.aadhar_num)
+  try{
+    const applicationCount = await prisma.application.count({
+      where:{
+        aadhar_num: aadhar
+      }
+    })
+    return res.status(200).json({"numOfApplications":applicationCount})
+  }
+  catch(e){
+    console.log(e);
+    return res.status(400).json({"message":"There is an error in the request"})
+  }
+})
 
 router.get("/getAllLocationDetails", async (req, res) => {
   try {
