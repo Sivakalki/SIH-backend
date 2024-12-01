@@ -11,9 +11,11 @@ app.use(express.json());
 const userRouter = require("./routes/userRoute"); // Corrected the path
 const applicationRouter = require("./routes/applicationRoute");
 const svroRouter = require("./routes/svro");
+const mvroRouter = require("./routes/mvro");
 app.use("/users", userRouter); // Using the router
 app.use("/api", applicationRouter)
 app.use("/svro", svroRouter)
+app.use("/mvro", mvroRouter)
 app.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
 });

@@ -31,23 +31,25 @@ router.get("/load_dashboard", async (req, res) => {
         const user_id = userRecord.user_id;
 
         // Fetch role IDs
-        const pendingRole = await prisma.role.findFirst({
+        const pendingRoles = await prisma.role.findMany({
             where: {
-                role_type: "SVRO",
+                role_type: {
+                    in: ["MVRO","SVRO"]
+                }
             },
             select: {
                 role_id: true,
             },
         });
 
-        if (!pendingRole) {
+        if (!pendingRoles || pendingRoles.length === 0) {
             return res.status(404).json({ message: "Pending role not found" });
         }
 
         const completedRoles = await prisma.role.findMany({
             where: {
                 role_type: {
-                    not: "SVRO",
+                    notIn: ["MVRO","SVRO"],
                 },
             },
             select: {
@@ -59,15 +61,18 @@ router.get("/load_dashboard", async (req, res) => {
             return res.status(404).json({ message: "No completed roles found" });
         }
         const completedRoleIds = completedRoles.map((role) => role.role_id);
-
+        const pendingRoleIds = pendingRoles.map((role) => role.role_id);
+        
         // Get pending applications
         const pendingApplications = await prisma.application.count({
             where: {
-                svro_user: {
+                mvro_user: {
                     user_id: user_id,
                 },
                 current_stage: {
-                    role_id: pendingRole.role_id,
+                    role_id: {
+                        in: pendingRoleIds
+                    }
                 },
             },
         });
@@ -75,7 +80,7 @@ router.get("/load_dashboard", async (req, res) => {
         // Get completed applications
         const completedApplications = await prisma.application.count({
             where: {
-                svro_user: {
+                mvro_user: {
                     user_id: user_id,
                 },
                 current_stage: {
@@ -89,7 +94,7 @@ router.get("/load_dashboard", async (req, res) => {
         // Get total applications
         const totalApplications = await prisma.application.count({
             where: {
-                svro_user: {
+                mvro_user: {
                     user_id: user_id,
                 },
             },
@@ -115,7 +120,7 @@ router.get("/load_dashboard", async (req, res) => {
         const reCheckApplications = await prisma.reCheck.count({
             where: {
                 application: {
-                    svro_user: {
+                    mvro_user: {
                         user_id: user_id
                     }
                 },
@@ -128,7 +133,7 @@ router.get("/load_dashboard", async (req, res) => {
                 EXTRACT(MONTH FROM created_at) AS month, 
                 COUNT(application_id) AS application_count
             FROM "Application"
-            WHERE  svro_user_id = ${user_id}
+            WHERE  mvro_user_id = ${user_id}
             GROUP BY year, month
             ORDER BY year ASC, month ASC;
         `;
@@ -168,7 +173,7 @@ router.get("/all_applications/:curr_id", async (req, res) => {
     try {
         const reports = await prisma.application.findMany({
             where: {
-                svro_id: curr_user_id
+                mvro_id: curr_user_id
             },
             include: {
                 address: true, // Include related address details
@@ -201,10 +206,9 @@ router.get("/pending_applications", async (req, res) => {
         if (user_id === null) {
             return res.status(400).json({ "message": "You are not eligible to get the applications" })
         }
-        console.log("user is ", user_id.user_id)
         const reports = await prisma.application.findMany({
             where: {
-                svro_user: {
+                mvro_user: {
                     user_id: user_id.user_id,
                 },
                 status: 'PENDING',
@@ -223,7 +227,7 @@ router.get("/pending_applications", async (req, res) => {
         const mappedReports = reports.map((report) => ({
             application_id: report.application_id,
             full_name: report.full_name,
-            role_type: report.current_stage.role_type, // Access role_type from the role relation
+            current_stage: report.current_stage.role_type, // Access role_type from the role relation
         }));
         console.log(mappedReports)
         return res.status(200).json({ "data": mappedReports })
@@ -240,7 +244,12 @@ router.get("/completed_applications", async (req, res) => {
         const user = getUserFromToken(authorizationHeader);
         const reports = await prisma.application.findMany({
             where: {
-                svro_id: user.user_id,
+                mvro_id: user.user_id,
+                current_stage: {
+                    role_type : {
+                        not: ['MVRO', 'SVRO']
+                    }
+                },
                 status: 'COMPLETED',
             },
             // include: {
@@ -330,7 +339,7 @@ router.get("/get_reports", async (req, res) => {
         }
 
         // Fetch the user's ID from the database
-        const svro = await prisma.user.findFirst({
+        const mvro = await prisma.user.findFirst({
             where: {
                 name: user.name,
             },
@@ -339,7 +348,7 @@ router.get("/get_reports", async (req, res) => {
             },
         });
 
-        if (!svro) {
+        if (!mvro) {
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -347,7 +356,7 @@ router.get("/get_reports", async (req, res) => {
         const reports = await prisma.report.findMany({
             where: {
                 handler: {
-                    user_id: svro.user_id, // Relate to handler's user_id
+                    user_id: mvro.user_id, // Relate to handler's user_id
                 },
             },
             select: {
@@ -396,7 +405,7 @@ router.get("/get_report/:rep_id", async (req, res) => {
         }
         const report_id = parseInt(req.params.rep_id)
         // Fetch the user's ID from the database
-        const svro = await prisma.user.findFirst({
+        const mvro = await prisma.user.findFirst({
             where: {
                 name: user.name,
             },
@@ -405,7 +414,7 @@ router.get("/get_report/:rep_id", async (req, res) => {
             },
         });
 
-        if (!svro) {
+        if (!mvro) {
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -413,7 +422,7 @@ router.get("/get_report/:rep_id", async (req, res) => {
         const report = await prisma.report.findFirst({
             where: {
                 handler: {
-                    user_id: svro.user_id, // Relate to handler's user_id
+                    user_id: mvro.user_id, // Relate to handler's user_id
                 },
                 report_id,
 
@@ -503,22 +512,21 @@ router.post("/create_report/:app_id", async (req, res) => {
                 user_id: true
             }
         })
-        const app_svro = await prisma.application.findFirst({
+        const app_mvro = await prisma.application.findFirst({
             where: {
                 application_id: app_id
             },
             select: {
-                svro_user_id: true
+                mvro_user_id: true
             }
         })
-        if (app_svro.svro_user_id !== handler.user_id) {
+        if (app_mvro.mvro_user_id !== handler.user_id) {
             return res.status(400).json({ "message": "You are not eligible access others application" })
         }
         console.log(handler, handler_name, "are the userss")
-        const level_id = await prisma.
-        role.findFirst({
+        const level_id = await prisma.role.findFirst({
             where: {
-                role_type: "SVRO"
+                role_type: "MVRO"
             },
             select: {
                 role_id: true
@@ -592,66 +600,6 @@ router.post("/create_report/:app_id", async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Internal server error" });
-    }
-});
-
-router.post("/resent_application/:application_id", async (req, res) => {
-    try {
-        const authorizationHeader = req.headers.authorization;
-        const user = getUserFromToken(authorizationHeader); // Ensure this function is correctly implemented.
-        
-        // Get the user details from the token
-        const user_row = await prisma.user.findFirst({
-            where: {
-                name: user.name
-            },
-            select: {
-                user_id: true
-            }
-        });
-        
-        const  application_id  = parseInt(req.params.application_id); // Consistent parameter name with the route
-        const { description } = req.body; // Ensure description is passed in the body
-        
-        // Fetch SVRO role associated with the application
-        const app_svro = await prisma.application.findUnique({
-            where: {
-                application_id: application_id // Ensure this is the correct field name in the database
-            },
-            select: {
-                svro_user: {
-                    select: {
-                        user_id: true
-                    }
-                }
-            }
-        });
-        
-        console.log(app_svro, user_row, " are the requested user and svro for the applicant");
-
-        // Ensure user has the correct role to proceed
-        if (app_svro.svro_user.user_id !== user_row.user_id) {
-            return res.status(400).json({ "message": "You are not authorized to perform this action" });
-        }
-
-        // Create re-check report with a "PENDING" status
-        const recheck = await prisma.reCheck.create({
-            data: {
-                application: {
-                    connect: {
-                        application_id: application_id
-                    }
-                },
-                description,
-                status: "PENDING"
-            }
-        });
-
-        return res.status(200).json({ "message": "Successfully recheck report is sent to applicant" });
-
-    } catch (e) {
-        console.error(e); // Corrected the variable name from 'error' to 'e'
-        res.status(500).json({ "message": "Internal server error" });
     }
 });
 

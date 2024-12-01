@@ -299,9 +299,16 @@ router.post("/application",
 
   router.get("/application/:app_id", async (req, res) => {
     try {
-        // const authorizationHeader = req.headers.authorization; // Get the authorization token
-        // const user = getUserFromToken(authorizationHeader); // Function to extract user data from token
-
+        const authorizationHeader = req.headers.authorization; // Get the authorization token
+        const user = getUserFromToken(authorizationHeader); // Function to extract user data from token
+        const user_row = await prisma.user.findFirst({
+          where:{
+            name : user.name
+          },
+          select:{
+            user_id: true,
+          }
+        })
         const { app_id } = req.params; // Extract the application id from the URL parameter
 
         // Fetch the application data based on the app_id
@@ -333,7 +340,10 @@ router.post("/application",
         });
         const report = await prisma.report.findFirst({
           where:{
-            application_id: parseInt(app_id)
+            application_id: parseInt(app_id),
+            handler:{
+              user_id : user_row.user_id
+            }
           },
           select:{
             report_id:true

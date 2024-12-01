@@ -250,6 +250,7 @@ model ReCheck{
   description String
   application_id Int
   application Application @relation(fields: [application_id], references: [application_id])
+  status STATUS
 }
 
 enum STATUS{
