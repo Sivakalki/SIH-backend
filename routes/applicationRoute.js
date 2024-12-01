@@ -5,6 +5,7 @@ const prisma = require("../prisma/prisma"); // Import Prisma client
 const { log } = require("console");
 const { getUserFromToken } = require("../utils/findUser");
 const router = express.Router();
+const {sendMail} = require("../utils/sendEmail")
 
 // Set up file storage for multer
 const storage = multer.diskStorage({
@@ -22,11 +23,11 @@ const upload = multer({ storage: storage });
 
 // POST route to save the application and related files
 router.post("/application",
-  // upload.fields([
-  //   { name: "addressProof", maxCount: 1 },
-  //   { name: "dobProof", maxCount: 1 },
-  //   { name: "casteProof", maxCount: 1 }
-  // ]),
+  upload.fields([
+    { name: "addressProof", maxCount: 1 },
+    { name: "dobProof", maxCount: 1 },
+    { name: "casteProof", maxCount: 1 }
+  ]),
   async (req, res) => {
     try {
       // Extract fields from the request body
@@ -45,9 +46,16 @@ router.post("/application",
         phone_num,
         email,
         addressDetails,
+        addressProofType,
+        dobProofType,
+        casteProofType,
       } = req.body;
 
-      const { pincode, state, district, mandal, address, sachivalayam } = addressDetails;
+
+      console.log(addressProofType, dobProofType, casteProofType)
+      // Parse addressDetails if it's a string
+      const addressObj = typeof addressDetails === 'string' ? JSON.parse(addressDetails) : addressDetails;
+      const { pincode, state, district, mandal, address, sachivalayam } = addressObj;
 
       // Validate required fields
       if (!full_name || !dob || !gender || !religion || !marital_status || !aadhar_num || !phone_num || !email || !addressDetails) {
@@ -56,7 +64,7 @@ router.post("/application",
 
       // Validate address details
       if (!pincode || !state || !district || !mandal) {
-        return res.status(400).json({ message: "Incomplete address details" });
+        return res.status(400).json({ message: "Incomplete address details Pincode, state, district, and mandal are required" });
       }
 
       // Fetch or validate the caste
@@ -89,35 +97,58 @@ router.post("/application",
       }
 
       // Handle proof files
-      // const addressProofFile = req.files["addressProof"] ? req.files["addressProof"][0] : null;
-      // const dobProofFile = req.files["dobProof"] ? req.files["dobProof"][0] : null;
-      // const casteProofFile = req.files["casteProof"] ? req.files["casteProof"][0] : null;
+      const addressProofFile = req.files?.["addressProof"]?.[0];
+      const dobProofFile = req.files?.["dobProof"]?.[0];
+      const casteProofFile = req.files?.["casteProof"]?.[0];
 
-      // const addressProof = addressProofFile ? await prisma.addressProof.create({
-      //   data: {
-      //     typeId: parseInt(addressProofTypeId), // Ensure typeId is provided and valid
-      //     filepath: `/uploads/${addressProofFile.filename}`
-      //   }
-      // }) : null;
+      // Validate required files first
+      if (!addressProofFile || !dobProofFile || !casteProofFile) {
+        return res.status(400).json({ 
+          message: "All proof files are required",
+          missing: {
+            addressProof: !addressProofFile,
+            dobProof: !dobProofFile,
+            casteProof: !casteProofFile
+          }
+        });
+      }
 
-      // const dobProof = dobProofFile ? await prisma.dobProof.create({
-      //   data: {
-      //     typeId: dobProofTypeId, // Ensure typeId is valid for DobProofType
-      //     filepath: `/uploads/${dobProofFile.filename}`
-      //   }
-      // }) : null;
+      // Create proof records
+      const addressProof = await prisma.addressProof.create({
+        data: {
+          filepath: `/uploads/${addressProofFile.filename}`,
+          type: {
+            connect: {
+              addressProofType: addressProofType
+            }
+          }
+        }
+      });
 
-      // const casteProof = casteProofFile ? await prisma.casteProof.create({
-      //   data: {
-      //     typeId: casteProofTypeId, // Ensure typeId is valid for CasteProofType
-      //     filepath: `/uploads/${casteProofFile.filename}`
-      //   }
-      // }) : null;
+      const dobProof = await prisma.dobProof.create({
+        data: {
+          filepath: `/uploads/${dobProofFile.filename}`,
+          type: {
+            connect: {
+              dobProofType: dobProofType
+            }
+          }
+        }
+      });
 
+      const casteProof = await prisma.casteProof.create({
+        data: {
+          filepath: `/uploads/${casteProofFile.filename}`,
+          type: {
+            connect: {
+              casteProofType: casteProofType
+            }
+          }
+        }
+      });
 
-      // if (!addressProofFile || !dobProof || !casteProof) {
-      //   return res.status(400).json({ message: "Address proof file is required" });
-      // }
+      console.log(addressProof, dobProof, casteProof, " are the proofs")
+      // Create the application record
 
       //get the svro
       const svro = await prisma.sVRO.findFirst({
@@ -284,8 +315,26 @@ router.post("/application",
           mro_user: mro.length ? { connect: { user_id: mro[0].user_id } } : undefined,
           current_stage: { connect: { role_id: current_stage.role_id } },
           status: "PENDING",
+          addressProof: { connect: {
+            id: addressProof.id
+          }},
+          dobProof: { connect: { 
+            id: dobProof.id
+          } },
+          casteProof: { connect: {
+            id : casteProof.id
+           } }, 
         }
       });
+
+      // Send confirmation email
+      const emailText = `Your caste certificate application has been successfully submitted.\n\nTracking ID: ${application.application_id}\n\nYou can use this tracking ID to check the status of your application.`;
+      
+      await sendMail(
+        email, 
+        emailText,
+        "Caste Certificate Application Submitted Successfully"
+      );
 
       return res.status(201).json({
         message: "Application created successfully",

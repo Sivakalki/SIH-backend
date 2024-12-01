@@ -230,7 +230,7 @@ model CasteProofType {
 
 model CasteProof {
   id         Int    @id @default(autoincrement())
-  typeId String @unique
+  typeId String 
   filepath         String
   type CasteProofType @relation(fields: [typeId], references: [casteProofType])
 
