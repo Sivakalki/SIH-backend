@@ -500,44 +500,76 @@ router.get("/getAllLocationDetails", async (req, res) => {
   }
 });
 
+router.get("/myapplications", async (req, res) => {
+  try {
+    // Get user from authorization token
+    const current_user = await getUserFromToken(req.headers.authorization);
+    
+    if (!current_user) {
+      return res.status(401).json({ message: "Unauthorized - Invalid token" });
+    }
 
+    // Fetch all applications for the user
+    const userApplications = await prisma.application.findMany({
+      where: {
+        applied_by: current_user.id
+      },
+      select: {
+        application_id: true,
+        full_name: true,
+        status: true,
+        aadhar_num: true
+      }
+    });
 
-// router.get('/getVroApplication', async (req, res) => {
-//   try {
-//     const authHeader = req.headers.authorization;
+    return res.status(200).json({
+      message: "Applications retrieved successfully",
+      applications: userApplications
+    });
 
-//     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-//       return res.status(401).json({ "message": "No token provided" });
-//     }
+  } catch (error) {
+    console.error("Error fetching applications:", error);
+    return res.status(500).json({ message: "Something went wrong", error: error.message });
+  }
+});
 
-//     // Extract the token
-//     const token = authHeader.split(" ")[1];
+router.get("/application_status/:application_id", async (req, res) => {
+  try {
+    let { application_id } = req.params;
+    application_id = parseInt(application_id);
 
-//     // Decode and verify the token
-//     const decoded = verifyToken(token);
+    // Find the application
+    const application = await prisma.application.findUnique({
+      where: {
+        application_id: application_id
+      },
+      select: {
+        full_name: true,
+        application_id: true,
+        status: true,
+        current_stage: {
+          select: {
+            role_type: true
+          }
+        }
+      }
+    });
 
-//     if (!decoded) {
-//       return res.status(400).json({ "message": "Token is expired or invalid" });
-//     }
-//     const id = decoded.id
-//     const vro = prisma.vRO.findFirst({
-//       where: {
-//         id: decoded.id
-//       }
-//     })
-//     const applications = prisma.application.findMany({
-//       where: {
-//         id: id
-//       }
-//     })
-//     if (!applications) {
-//       return res.status(200).json({ "message": "There are no applicaitons" })
-//     }
-//     return res.status()
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ message: "Something went wrong" });
-//   }
-// })
+    if (!application) {
+      return res.status(404).json({
+        message: "No application found with the provided application ID"
+      });
+    }
+
+    return res.status(200).json({
+      message: "Application status retrieved successfully",
+      application
+    });
+
+  } catch (error) {
+    console.error("Error fetching application status:", error);
+    return res.status(500).json({ message: "Something went wrong", error: error.message });
+  }
+});
 
 module.exports = router;
