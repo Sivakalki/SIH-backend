@@ -5,7 +5,8 @@ const prisma = require("../prisma/prisma"); // Import Prisma client
 const { log } = require("console");
 const { getUserFromToken } = require("../utils/findUser");
 const router = express.Router();
-const {sendMail} = require("../utils/sendEmail")
+const {sendMail} = require("../utils/sendEmail");
+const { CLIENT_RENEG_LIMIT } = require("tls");
 
 // Set up file storage for multer
 const storage = multer.diskStorage({
@@ -398,11 +399,20 @@ router.post("/application",
             report_id:true
           }
         })
+        const resend = await prisma.reCheck.findFirst({
+          where:{
+            application_id: parseInt(app_id)
+          },
+          select:{
+            id:true,
+            status:true
+          }
+        })
         console.log(report, " is the report")
         if (!application) {
             return res.status(404).json({ message: "Application not found" });
         }
-        return res.status(200).json({ data: application, "report":report });
+        return res.status(200).json({ data: application, "report":report , "recheck":resend});
     }
     catch (e) {
         console.log(e);
@@ -410,54 +420,290 @@ router.post("/application",
     }
 });
 
+router.get("/edit_application/:application_id", async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ message: "No authorization header" });
+        }
+
+        const user_email = getUserFromToken(authHeader);
+        const user = await prisma.user.findFirst({
+            where: {
+                email: user_email.email
+            },
+            select: {
+                user_id: true
+            }
+        });
+        if (!user) {
+            return res.status(401).json({ message: "Invalid token" });
+        }
+
+        const application_id = parseInt(req.params.application_id);
+        if (!application_id) {
+            return res.status(400).json({ message: "Invalid application ID" });
+        }
+
+        const application = await prisma.application.findUnique({
+            where: {
+                application_id: application_id
+            },
+            include: {
+                applied_by: {
+                    select: {
+                        name: true,
+                        email: true,
+                        phone: true
+                    }
+                },
+                caste: true,
+                address: true,
+                addressProof: {
+                    include: {
+                        type: true
+                    }
+                },
+                casteProof: {
+                    include: {
+                        type: true
+                    }
+                },
+                dobProof: {
+                    include: {
+                        type: true
+                    }
+                },
+                parent_guardian_type: true,
+                current_stage: true,
+                reCheck: {
+                    orderBy: {
+                        created_at: 'desc'
+                    }
+                }
+            }
+        });
+
+        if (!application) {
+            return res.status(404).json({ message: "Application not found" });
+        }
+
+        console.log(application.applied_by_id, " is the applied_by_id and ", user.user_id, " is the user_id")
+
+        // Check if user has permission to view this application
+        if (application.applied_by_id !== user.user_id) {
+            return res.status(403).json({ message: "You don't have permission to view this application" });
+        }
+
+        // Format the response
+        const formattedResponse = {
+            application_id: application.application_id,
+            full_name: application.full_name,
+            dob: application.dob,
+            gender: application.gender,
+            religion: application.religion,
+            caste: application.caste.caste_type,
+            sub_caste: application.sub_caste,
+            parent_religion: application.parent_religion,
+            parent_guardian_type: application.parent_guardian_type.type,
+            parent_guardian_name: application.parent_guardian_name,
+            address: {
+                pincode: application.address.pincode,
+                state: application.address.state,
+                district: application.address.district,
+                mandal: application.address.mandal,
+                sachivalayam: application.address.sachivalayam,
+                address: application.address.address
+            },
+            proofs: {
+                address: application.addressProof ? {
+                    type: application.addressProof.type.addressProofType,
+                    filepath: application.addressProof.filepath
+                } : null,
+                caste: application.casteProof ? {
+                    type: application.casteProof.type.casteProofType,
+                    filepath: application.casteProof.filepath
+                } : null,
+                dob: application.dobProof ? {
+                    type: application.dobProof.type.dobProofType,
+                    filepath: application.dobProof.filepath
+                } : null
+            },
+            marital_status: application.marital_status,
+            aadhar_num: application.aadhar_num,
+            phone_num: application.phone_num,
+            email: application.email,
+            status: application.status,
+            current_stage: application.current_stage?.role_type || null,
+            created_at: application.created_at,
+            updated_at: application.updated_at,
+            recheck: application.reCheck[0] || null,
+            rejection_reason: application.rejection_reason
+        };
+
+        res.status(200).json(formattedResponse);
+    } catch (error) {
+        console.error("Error fetching application details:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
 router.put("/edit_application/:app_id", async (req, res) => {
   try {
-    const app_id = req.params.app_id;
-    const { field1, field2, ...otherFields } = req.body; // Fields to be updated
+    const app_id = parseInt(req.params.app_id);
+    if (!app_id) {
+      return res.status(400).json({ message: "Invalid application ID" });
+    }
+
     const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "No token provided" });
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
     }
 
-    const token = authHeader.split(" ")[1];
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return res.status(400).json({ message: "Token is expired or invalid" });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: decoded.email }
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const application = await prisma.application.findFirst({
+    const user_email = getUserFromToken(authHeader);
+    const user = await prisma.user.findFirst({
       where: {
-        application_id: app_id,
-        applicant_id: user.id
+        email: user_email.email
+      },
+      select: {
+        user_id: true
       }
     });
 
-    if (!application) {
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    // Find the application and check ownership
+    const existingApplication = await prisma.application.findFirst({
+      where: {
+        application_id: app_id,
+        applied_by_id: user.user_id
+      }
+    });
+
+    if (!existingApplication) {
       return res.status(404).json({ message: "Application not found or you don't have access" });
+    }
+
+    // Extract fields from request body
+    const {
+      full_name,
+      dob,
+      gender,
+      religion,
+      caste,
+      sub_caste,
+      parent_religion,
+      parent_guardian_type,
+      parent_guardian_name,
+      address,
+      marital_status,
+      aadhar_num,
+      phone_num,
+      email
+    } = req.body;
+
+    // First, update the address if provided
+    let addressUpdate;
+    if (address) {
+      addressUpdate = await prisma.address.update({
+        where: {
+          address_id: existingApplication.address_id
+        },
+        data: {
+          pincode: address.pincode,
+          state: address.state,
+          district: address.district,
+          mandal: address.mandal,
+          sachivalayam: address.sachivalayam,
+          address: address.address
+        }
+      });
+    }
+
+    // Get caste_id if caste is provided
+    let caste_id;
+    if (caste) {
+      const casteRecord = await prisma.caste.findUnique({
+        where: {
+          caste_type: caste
+        }
+      });
+      if (casteRecord) {
+        caste_id = casteRecord.caste_id;
+      }
+    }
+
+    // Get parent_guardian_id if parent_guardian_type is provided
+    let parent_guardian_id;
+    if (parent_guardian_type) {
+      const guardianType = await prisma.parentGuardianType.findUnique({
+        where: {
+          type: parent_guardian_type
+        }
+      });
+      if (guardianType) {
+        parent_guardian_id = guardianType.id;
+      }
     }
 
     // Update the application
     const updatedApplication = await prisma.application.update({
       where: { application_id: app_id },
-      data: { field1, field2, ...otherFields }
+      data: {
+        ...(full_name && { full_name }),
+        ...(dob && { dob: new Date(dob) }),
+        ...(gender && { gender }),
+        ...(religion && { religion }),
+        ...(caste_id && { caste_id }),
+        ...(sub_caste && { sub_caste }),
+        ...(parent_religion && { parent_religion }),
+        ...(parent_guardian_id && { parent_guardian_id }),
+        ...(parent_guardian_name && { parent_guardian_name }),
+        ...(marital_status && { marital_status }),
+        ...(aadhar_num && { aadhar_num }),
+        ...(phone_num && { phone_num }),
+        ...(email && { email })
+      },
+      include: {
+        caste: true,
+        address: true,
+        parent_guardian_type: true,
+        addressProof: {
+          include: {
+            type: true
+          }
+        },
+        casteProof: {
+          include: {
+            type: true
+          }
+        },
+        dobProof: {
+          include: {
+            type: true
+          }
+        }
+      }
+    });
+
+    // Update the recheck status to Completed
+    await prisma.reCheck.update({
+      where: {
+        application_id: parseInt(app_id)
+      },
+      data: {
+        status: "COMPLETED"
+      }
     });
 
     return res.status(200).json({
       message: "Application updated successfully",
-      updatedApplication
+      application: updatedApplication
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error updating application:", error);
     return res.status(500).json({ message: "Something went wrong", error: error.message });
   }
 });
@@ -503,7 +749,15 @@ router.get("/getAllLocationDetails", async (req, res) => {
 router.get("/myapplications", async (req, res) => {
   try {
     // Get user from authorization token
-    const current_user = await getUserFromToken(req.headers.authorization);
+    const user = await getUserFromToken(req.headers.authorization);
+    const current_user = await prisma.user.findUnique({
+      where: {
+        email: user.email
+      },
+      select:{
+        user_id: true
+      }
+    });
     
     if (!current_user) {
       return res.status(401).json({ message: "Unauthorized - Invalid token" });
@@ -512,7 +766,9 @@ router.get("/myapplications", async (req, res) => {
     // Fetch all applications for the user
     const userApplications = await prisma.application.findMany({
       where: {
-        applied_by: current_user.id
+        applied_by: {
+          user_id: current_user.user_id
+        }
       },
       select: {
         application_id: true,
@@ -570,6 +826,59 @@ router.get("/application_status/:application_id", async (req, res) => {
     console.error("Error fetching application status:", error);
     return res.status(500).json({ message: "Something went wrong", error: error.message });
   }
+});
+
+router.get("/recheck_applications", async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ message: "No authorization header" });
+        }
+
+        const user = getUserFromToken(authHeader);
+        if (!user) {
+            return res.status(401).json({ message: "Invalid token" });
+        }
+        
+        // Get all applications by the current user that have recheck requests
+        const applications = await prisma.application.findMany({
+            where: {
+                applied_by_id: user.user_id,
+                reCheck: {
+                    some: {} // Only get applications that have recheck requests
+                }
+            },
+            select: {
+                application_id: true,
+                full_name: true,
+                reCheck: {
+                    select: {
+                        description: true,
+                        created_at: true,
+                        status: true,
+                    }
+                }
+            }
+        });
+
+        if (!applications) {
+            return res.status(404).json({ message: "No recheck applications found" });
+        }
+
+        // Format the response
+        const formattedApplications = applications.map(app => ({
+            application_id: app.application_id,
+            fullname: app.full_name,
+            reportDescription: app.reCheck[0]?.description || '',
+            reportCreated_at: app.reCheck[0]?.created_at || null,
+            status: app.reCheck[0]?.status || '',
+        }));
+
+        res.status(200).json(formattedApplications);
+    } catch (error) {
+        console.error("Error fetching recheck applications:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 module.exports = router;

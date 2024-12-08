@@ -107,8 +107,9 @@ model Application {
   rejection_reason String?
 
   reCheck ReCheck[]
-}
 
+  CalendarEvent CalendarEvent[]
+}
 
 model Report {
   report_id        Int        @id @default(autoincrement())
@@ -144,6 +145,7 @@ model SVRO {
   application Application[]
   user         User   @relation(fields: [user_id], references: [user_id])
   user_id      Int   @unique
+  CalendarEvent CalendarEvent[]
 }
 
 model MVRO {
@@ -248,9 +250,24 @@ model ParentGuardianType{
 model ReCheck{
   id Int @id @default(autoincrement())
   description String
-  application_id Int
+  application_id Int  @unique
   application Application @relation(fields: [application_id], references: [application_id])
   status STATUS
+  created_at DateTime @default(now())
+}
+
+model CalendarEvent {
+  id             Int         @id @default(autoincrement())
+  svro_user_id   Int
+  svro_user      SVRO       @relation(fields: [svro_user_id], references: [user_id])
+  application_id Int
+  application    Application @relation(fields: [application_id], references: [application_id])
+  event_date     DateTime
+  status         STATUS     // e.g., "SCHEDULED", "COMPLETED", "CANCELLED"
+  notes          String?    // Optional notes about the appointment
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+
 }
 
 enum STATUS{

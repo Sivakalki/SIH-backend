@@ -1,4 +1,5 @@
 const prisma = require("./prisma")
+const { handleDuplicateRechecks } = require("../utils/recheckUtils");
 
 async function main() {
   const admin = await prisma.role.upsert({
@@ -164,8 +165,35 @@ async function main() {
       type: "SIBLING"
     }
   })
-}
   
+  // Create 3 recheck requests for testing
+  const application = await prisma.application.findFirst();
+  if (application) {
+    await prisma.reCheck.createMany({
+      data: [
+        {
+          description: "First recheck request",
+          application_id: application.application_id,
+          status: "PENDING"
+        },
+        {
+          description: "Second recheck request",
+          application_id: application.application_id,
+          status: "PENDING"
+        },
+        {
+          description: "Third recheck request",
+          application_id: application.application_id,
+          status: "PENDING"
+        }
+      ]
+    });
+
+    // Handle duplicate rechecks - keep only the first one
+    await handleDuplicateRechecks();
+  }
+}
+
 main()
   .then(async () => {
     await prisma.$disconnect()
