@@ -333,6 +333,7 @@ router.get("/pending_applications", async (req, res) => {
 })
 
 router.get("/completed_applications", async (req, res) => {
+    
     try {
         const authorizationHeader = req.headers.authorization;
         const user = getUserFromToken(authorizationHeader);
@@ -351,6 +352,8 @@ router.get("/completed_applications", async (req, res) => {
                 full_name: true
             }
         })
+
+        cionsole.log(reports, " are the reports")
 
         // Transform the data to get only the role_type from current_stage
         const formattedData = reports.map(report => ({
