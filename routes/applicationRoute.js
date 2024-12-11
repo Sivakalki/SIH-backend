@@ -359,6 +359,8 @@ router.post("/application",
             user_id: true,
           }
         })
+
+        console.log(user_row, " is the user")
         const { app_id } = req.params; // Extract the application id from the URL parameter
 
         // Fetch the application data based on the app_id

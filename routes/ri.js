@@ -130,7 +130,7 @@ router.get("/load_dashboard", async (req, res) => {
 
         const ri = await prisma.role.findFirst({
             where: {
-                role_type: "ri"
+                role_type: "RI"
             },
             select: {
                 role_id: true
@@ -256,7 +256,7 @@ router.get("/ready_to_review/", async (req, res) => {
         }
 
         // Verify user is ri
-        if (curr_user.role?.role_type !== "ri") {
+        if (curr_user.role?.role_type !== "RI") {
             return res.status(403).json({ 
                 success: false,
                 message: "Access denied. Only ri users can access this endpoint" 
@@ -266,7 +266,7 @@ router.get("/ready_to_review/", async (req, res) => {
         // Get ri role
         const ri = await prisma.role.findFirst({
             where: {
-                role_type: "ri"
+                role_type: "RI"
             },
             select: {
                 role_id: true
@@ -283,7 +283,9 @@ router.get("/ready_to_review/", async (req, res) => {
         // Get applications
         const applications = await prisma.application.findMany({
             where: {
-                ri_user_id: curr_user.user_id,
+                ri_user: {
+                    user_id: curr_user.user_id
+                },
                 current_stage: {
                     role_id: ri.role_id
                 }
@@ -297,7 +299,7 @@ router.get("/ready_to_review/", async (req, res) => {
                 current_stage: true,
             }
         });
-
+        console.log(applications);
         return res.status(200).json({ 
             success: true,
             message: "Applications fetched successfully",
@@ -352,7 +354,6 @@ router.get("/pending_applications", async (req, res) => {
             full_name: report.full_name,
             current_stage: report.current_stage.role_type, // Access role_type from the role relation
         }));
-        console.log(mappedReports)
         return res.status(200).json({ "data": mappedReports })
     }
     catch (e) {
