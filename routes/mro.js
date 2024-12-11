@@ -35,7 +35,7 @@ router.get("/load_dashboard", async (req, res) => {
         const pendingRoles = await prisma.role.findMany({
             where: {
                 role_type: {
-                    in: ["MVRO","SVRO"]
+                    in: ["MVRO","SVRO","RI","MRO"]
                 }
             },
             select: {
@@ -50,7 +50,7 @@ router.get("/load_dashboard", async (req, res) => {
         const completedRoles = await prisma.role.findMany({
             where: {
                 role_type: {
-                    notIn: ["MVRO","SVRO"],
+                    notIn: ["MVRO","SVRO","RI","MRO"],
                 },
             },
             select: {
@@ -67,7 +67,7 @@ router.get("/load_dashboard", async (req, res) => {
         // Get pending applications
         const pendingApplications = await prisma.application.count({
             where: {
-                mvro_user: {
+                mro_user: {
                     user_id: user_id,
                 },
                 current_stage: {
@@ -81,7 +81,7 @@ router.get("/load_dashboard", async (req, res) => {
         // Get completed applications
         const completedApplications = await prisma.application.count({
             where: {
-                mvro_user: {
+                mro_user: {
                     user_id: user_id,
                 },
                 current_stage: {
@@ -95,7 +95,7 @@ router.get("/load_dashboard", async (req, res) => {
         // Get total applications
         const totalApplications = await prisma.application.count({
             where: {
-                mvro_user: {
+                mro_user: {
                     user_id: user_id,
                 },
             },
@@ -121,16 +121,16 @@ router.get("/load_dashboard", async (req, res) => {
         const reCheckApplications = await prisma.reCheck.count({
             where: {
                 application: {
-                    mvro_user: {
+                    mro_user: {
                         user_id: user_id
                     }
                 },
             }
         })
 
-        const mvro = await prisma.role.findFirst({
+        const mro = await prisma.role.findFirst({
             where: {
-                role_type: "MVRO"
+                role_type: "mro"
             },
             select: {
                 role_id: true
@@ -139,11 +139,11 @@ router.get("/load_dashboard", async (req, res) => {
 
         const readyApplications = await prisma.application.count({
             where: {
-                mvro_user: {
+                mro_user: {
                     user_id: user_id
                 },
                 current_stage: {
-                    role_id: mvro.role_id
+                    role_id: mro.role_id
                 }
             }
         })
@@ -154,7 +154,7 @@ router.get("/load_dashboard", async (req, res) => {
                 EXTRACT(MONTH FROM created_at) AS month, 
                 COUNT(application_id) AS application_count
             FROM "Application"
-            WHERE  mvro_user_id = ${user_id}
+            WHERE  mro_user_id = ${user_id}
             GROUP BY year, month
             ORDER BY year ASC, month ASC;
         `;
@@ -195,7 +195,7 @@ router.get("/all_applications/:curr_id", async (req, res) => {
     try {
         const reports = await prisma.application.findMany({
             where: {
-                mvro_id: curr_user_id
+                mro_id: curr_user_id
             },
             include: {
                 address: true, // Include related address details
@@ -255,37 +255,37 @@ router.get("/ready_to_review/", async (req, res) => {
             });
         }
 
-        // Verify user is MVRO
-        if (curr_user.role?.role_type !== "MVRO") {
+        // Verify user is ri
+        if (curr_user.role?.role_type !== "mro") {
             return res.status(403).json({ 
                 success: false,
-                message: "Access denied. Only MVRO users can access this endpoint" 
+                message: "Access denied. Only ri users can access this endpoint" 
             });
         }
 
-        // Get MVRO role
-        const mvro = await prisma.role.findFirst({
+        // Get ri role
+        const mro = await prisma.role.findFirst({
             where: {
-                role_type: "MVRO"
+                role_type: "mro"
             },
             select: {
                 role_id: true
             }
         });
 
-        if (!mvro) {
+        if (!mro) {
             return res.status(500).json({ 
                 success: false,
-                message: "MVRO role not found in system" 
+                message: "mro role not found in system" 
             });
         }
 
         // Get applications
         const applications = await prisma.application.findMany({
             where: {
-                mvro_user_id: curr_user.user_id,
+                mro_user_id: curr_user.user_id,
                 current_stage: {
-                    role_id: mvro.role_id
+                    role_id: mro.role_id
                 }
             },
             include: {
@@ -331,7 +331,7 @@ router.get("/pending_applications", async (req, res) => {
         }
         const reports = await prisma.application.findMany({
             where: {
-                mvro_user: {
+                mro_user: {
                     user_id: user_id.user_id,
                 },
                 status: 'PENDING',
@@ -382,12 +382,12 @@ router.get("/completed_applications", async (req, res) => {
         }
         const reports = await prisma.application.findMany({
             where: {
-                mvro_user: {
+                mro_user: {
                     user_id: user_id.user_id   
                 },
                 current_stage: {
                     role_type : {
-                        notIn: ['MVRO', 'SVRO']
+                        notIn: ['mro', 'SVRO']
                     }
                 },
                 status: 'PENDING',
@@ -439,14 +439,14 @@ router.post("/recheck/:app_id", async (req, res) => {
 
         const application = await prisma.application.findUnique({
             where: { application_id: app_id },
-            select: { current_stage_id: true, mvro_user_id: true }
+            select: { current_stage_id: true, mro_user_id: true }
         });
 
         if (!application) {
             return res.status(404).json({ message: "Application not found" });
         }
 
-        if (user.role_id !== 3 || application.mvro_user_id || application.current_stage_id !== 3) {
+        if (user.role_id !== 3 || application.mro_user_id || application.current_stage_id !== 3) {
             return res.status(403).json({ message: "Permission denied" });
         }
 
@@ -476,7 +476,7 @@ router.get("/get_reports", async (req, res) => {
         }
 
         // Fetch the user's ID from the database
-        const mvro = await prisma.user.findFirst({
+        const mro = await prisma.user.findFirst({
             where: {
                 name: user.name,
             },
@@ -485,7 +485,7 @@ router.get("/get_reports", async (req, res) => {
             },
         });
 
-        if (!mvro) {
+        if (!mro) {
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -493,7 +493,7 @@ router.get("/get_reports", async (req, res) => {
         const reports = await prisma.report.findMany({
             where: {
                 handler: {
-                    user_id: mvro.user_id, // Relate to handler's user_id
+                    user_id: mro.user_id, // Relate to handler's user_id
                 },
             },
             select: {
@@ -546,7 +546,7 @@ router.get("/get_report/:rep_id", async (req, res) => {
         }
         const report_id = parseInt(req.params.rep_id)
         // Fetch the user's ID from the database
-        const mvro = await prisma.user.findFirst({
+        const ri = await prisma.user.findFirst({
             where: {
                 name: user.name,
             },
@@ -555,7 +555,7 @@ router.get("/get_report/:rep_id", async (req, res) => {
             },
         });
 
-        if (!mvro) {
+        if (!ri) {
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -563,7 +563,7 @@ router.get("/get_report/:rep_id", async (req, res) => {
         const report = await prisma.report.findFirst({
             where: {
                 handler: {
-                    user_id: mvro.user_id, // Relate to handler's user_id
+                    user_id: ri.user_id, // Relate to handler's user_id
                 },
                 report_id,
 
@@ -652,21 +652,21 @@ router.post("/create_report/:app_id", async (req, res) => {
                 user_id: true
             }
         })
-        const app_mvro = await prisma.application.findFirst({
+        const app_ri = await prisma.application.findFirst({
             where: {
                 application_id: app_id
             },
             select: {
-                mvro_user_id: true
+                ri_user_id: true
             }
         })
-        if (app_mvro.mvro_user_id !== handler.user_id) {
+        if (app_ri.ri_user_id !== handler.user_id) {
             return res.status(400).json({ "message": "You are not eligible access others application" })
         }
         console.log(handler, handler_name, "are the userss")
         const level_id = await prisma.role.findFirst({
             where: {
-                role_type: "MVRO"
+                role_type: "ri"
             },
             select: {
                 role_id: true
@@ -683,9 +683,9 @@ router.post("/create_report/:app_id", async (req, res) => {
             where: { application_id: app_id },
         });
 
-        const mro = await prisma.role.findFirst({
+        const ri = await prisma.role.findFirst({
             where: {
-                role_type: "mro"
+                role_type: "RI"
             },
             select: {
                 role_id: true
@@ -725,7 +725,7 @@ router.post("/create_report/:app_id", async (req, res) => {
             data: {
                 current_stage: {
                     connect: {
-                        role_id: mro.role_id
+                        role_id: ri.role_id
                     }
                 },
                 updated_at: new Date(), // Updates the timestamp
