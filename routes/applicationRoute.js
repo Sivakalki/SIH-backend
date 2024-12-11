@@ -52,8 +52,7 @@ router.post("/application",
         casteProofType,
       } = req.body;
 
-
-      console.log(addressProofType, dobProofType, casteProofType)
+      console.log(req.body);
       // Parse addressDetails if it's a string
       const addressObj = typeof addressDetails === 'string' ? JSON.parse(addressDetails) : addressDetails;
       const { pincode, state, district, mandal, address, sachivalayam } = addressObj;
@@ -96,7 +95,7 @@ router.post("/application",
       if(aadhar_check){
         return res.status(400).json({"Message":"Applicant with this aadhar num is already created"})
       }
-
+      console.log(req.files, " are the files")
       // Handle proof files
       const addressProofFile = req.files?.["addressProof"]?.[0];
       const dobProofFile = req.files?.["dobProof"]?.[0];
@@ -176,6 +175,7 @@ router.post("/application",
           user_id: true,
         },
       });
+      console.log(mvros, " are the mvros")
       // Step 1: Find the RI based on mandal and sachivalayam
       // Fetch all RIs matching the mandal
       const ri = await prisma.rI.findMany({
@@ -187,6 +187,8 @@ router.post("/application",
           user_id: true,
         },
       });
+
+      console.log(ri,mandal, " are the ri")
       // Step 1: Find the MRO based on mandal and sachivalayam
       // Fetch all MROs matching the mandal
       const mro = await prisma.mRO.findMany({
@@ -203,6 +205,7 @@ router.post("/application",
 
       let mvroId = null;
 
+      console.log(sachivalayam, " is the sachivalayam")
       // Step 1: Find the matching MVRO
       for (const mvro of mvros) {
         const sachivalayam_final = await prisma.sachivalayam.findFirst({
@@ -217,7 +220,7 @@ router.post("/application",
           break; // Exit the loop once a match is found
         }
       }
-
+      console.log(mvroId, " is the mvroid")
       // Step 2: Check the number of pending applications for the found MVRO
       if (mvroId) {
         const pendingApplicationsCount = await prisma.application.count({
@@ -249,7 +252,7 @@ router.post("/application",
       } else {
         console.log("No matching MVRO found.");
       }
-
+      console.log(mvroId, " is the final mvroid")
       const mvroUserId = await prisma.mVRO.findFirst({
         where: {
           mvro_id: mvroId,
@@ -285,6 +288,8 @@ router.post("/application",
           address_id: true,
         }
       });
+
+      console.log(ri, " is the ri")
 
       // Create the application
       const application = await prisma.application.create({

@@ -76,6 +76,14 @@ async function main() {
         addressProofType:"GAS"
     }
   })
+  const aadhaar_dob = await prisma.dobProofType.upsert({
+    where:{
+        dobProofType:"AADHAAR"
+    },update:{},
+    create:{
+        dobProofType:"AADHAAR"
+    }
+  })
   const pan = await prisma.dobProofType.upsert({
     where:{
         dobProofType:"PAN"
