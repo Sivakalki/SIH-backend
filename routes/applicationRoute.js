@@ -723,6 +723,7 @@ router.get("/check_aadhaar/:aadhar_num",async (req,res)=>{
         aadhar_num: aadhar
       }
     })
+    console.log("entered ehre")
     return res.status(200).json({"numOfApplications":applicationCount})
   }
   catch(e){

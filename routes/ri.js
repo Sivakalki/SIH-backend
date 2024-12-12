@@ -469,6 +469,7 @@ router.post("/recheck/:app_id", async (req, res) => {
 
 router.get("/get_reports", async (req, res) => {
     try {
+        console.log("entered here")
         // Extract and validate the authorization token
         const authorizationHeader = req.headers.authorization;
         const user = getUserFromToken(authorizationHeader);
@@ -513,7 +514,7 @@ router.get("/get_reports", async (req, res) => {
         });
 
         if (!reports || reports.length === 0) {
-            return res.status(404).json({ message: "No reports found for the user" });
+            return res.status(200).json({ message: "No reports found for the user" });
         }
 
         // Map the response to include applicant_name
@@ -527,6 +528,7 @@ router.get("/get_reports", async (req, res) => {
             applicant_name: report.application.full_name,
         })).sort((a, b) => a.report_id - b.report_id);
 
+        console.log(formattedReports, " are the reports");
         // Send the formatted report data as a response
         return res.status(200).json({
             "data": formattedReports,
