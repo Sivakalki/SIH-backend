@@ -189,7 +189,6 @@ router.get("/load_dashboard", async (req, res) => {
     }
 });
 
-
 router.get("/all_applications/:curr_id", async (req, res) => {
     const curr_user_id = req.params.curr_id
     try {
@@ -351,6 +350,7 @@ router.get("/pending_applications", async (req, res) => {
                         role_type: true
                     }
                 },
+                status: true,
                 full_name: true,
             }
 
@@ -358,6 +358,7 @@ router.get("/pending_applications", async (req, res) => {
         const mappedReports = reports.map((report) => ({
             application_id: report.application_id,
             full_name: report.full_name,
+            status: report.status,
             current_stage: report.current_stage.role_type, // Access role_type from the role relation
         }));
         console.log(mappedReports)
@@ -419,6 +420,74 @@ router.get("/completed_applications", async (req, res) => {
     }
 })
 
+router.post("/reject_application/:app_id", async (req, res) => {
+    try {
+        const { app_id } = req.params;
+        const { reason } = req.body;
+
+        // Validate authorization
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return res.status(401).json({ message: "No token provided" });
+        }
+
+        // Get user from token
+        const user = getUserFromToken(authHeader);
+        if (!user || !user.email) {
+            return res.status(401).json({ message: "Invalid token" });
+        }
+
+        // Find the user in the database
+        const mro_user = await prisma.user.findFirst({
+            where: { email: user.email },
+            select: { user_id: true }
+        });
+
+        if (!mro_user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Find the application
+        const application = await prisma.application.findUnique({
+            where: { application_id: parseInt(app_id) },
+            select: { mro_user_id: true, current_stage_id: true }
+        });
+
+        if (!application) {
+            return res.status(404).json({ message: "Application not found" });
+        }
+
+        // Verify the MRO user has rights to reject
+        const mro_role = await prisma.role.findFirst({
+            where: { role_type: "MRO" },
+            select: { role_id: true }
+        });
+
+        if (!mro_role || application.current_stage_id !== mro_role.role_id) {
+            return res.status(403).json({ message: "Not authorized to reject this application" });
+        }
+
+        // Update application status
+        const updatedApplication = await prisma.application.update({
+            where: { application_id: parseInt(app_id) },
+            data: {
+                status: "REJECTED",
+                updated_at: new Date()
+            }
+        });
+
+        return res.status(200).json({
+            message: "Application rejected successfully",
+            application: updatedApplication
+        });
+    } catch (error) {
+        console.error("Error rejecting application:", error);
+        return res.status(500).json({ 
+            message: "Internal server error", 
+            error: error.message 
+        });
+    }
+});
 
 router.post("/recheck/:app_id", async (req, res) => {
     try {
@@ -543,6 +612,33 @@ router.get("/get_reports", async (req, res) => {
         return res.status(500).json({ message: "There is an error", error: e.message });
     }
 });
+
+router.post("reject_application/:app_id", async (req, res) => {
+    try {
+        const { app_id } = req.params;
+        const { description } = req.body;
+
+        if (!description) {
+            return res.status(400).json({ message: "Description is required" });
+        }
+
+        const applicaiton = await prisma.application.update({
+            where: {
+                application_id: parseInt(app_id)
+            },
+            data: {
+                status: "REJECTED",
+                rejection_reason: description
+            }
+        })
+
+        return res.status(200).json({ "message": "Application rejected successfully" })
+    }
+    catch (e) { 
+        console.log(e)  
+        res.status(400).json({ "message": "There is an error in the request" })
+    }
+})
 
 router.get("/get_report/:rep_id", async (req, res) => {
     try {
