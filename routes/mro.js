@@ -244,46 +244,54 @@ router.get("/ready_to_review/", async (req, res) => {
                     select: {
                         role_type: true
                     }
-                }
+                },
             }
         });
 
-        if (!curr_user) {
+        const curr_mro = await prisma.mRO.findFirst({
+            where: {
+                user_id: curr_user.user_id
+            },
+            select:{
+                mro_id: true
+            }
+        })
+        if (!curr_mro) {
             return res.status(404).json({ 
                 success: false,
                 message: "User not found in database" 
             });
         }
-
-        // Verify user is ri
-        if (curr_user.role?.role_type !== "mro") {
-            return res.status(403).json({ 
-                success: false,
-                message: "Access denied. Only ri users can access this endpoint" 
-            });
-        }
-
+    
         // Get ri role
         const mro = await prisma.role.findFirst({
             where: {
-                role_type: "mro"
+                role_type: "MRO"
             },
             select: {
                 role_id: true
             }
         });
+        if(curr_user.role.role_type !== "MRO") {
+            return res.status(400).json({ 
+                success: false,
+                message: "You are not eligible to get the applications" 
+            });
+        }
 
         if (!mro) {
             return res.status(500).json({ 
                 success: false,
-                message: "mro role not found in system" 
+                message: "MRO role not found in system" 
             });
         }
+
+        console.log(mro.role_id,curr_user.user_id, " is the role id of mro");
 
         // Get applications
         const applications = await prisma.application.findMany({
             where: {
-                mro_user_id: curr_user.user_id,
+                mro_user_id: curr_mro.mro_id,
                 current_stage: {
                     role_id: mro.role_id
                 }

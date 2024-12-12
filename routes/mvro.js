@@ -660,10 +660,18 @@ router.post("/create_report/:app_id", async (req, res) => {
                 mvro_user_id: true
             }
         })
-        if (app_mvro.mvro_user_id !== handler.user_id) {
+        const mvro_user = await prisma.mVRO.findFirst({
+            where: {
+                user_id: app_mvro.mvro_user_id
+            },
+            select: {
+                user_id: true
+            }
+        })
+        console.log(mvro_user.user_id, handler.user_id, "are the userss")
+        if (mvro_user.user_id !== handler.user_id) {
             return res.status(400).json({ "message": "You are not eligible access others application" })
         }
-        console.log(handler, handler_name, "are the userss")
         const level_id = await prisma.role.findFirst({
             where: {
                 role_type: "MVRO"
@@ -683,9 +691,9 @@ router.post("/create_report/:app_id", async (req, res) => {
             where: { application_id: app_id },
         });
 
-        const mro = await prisma.role.findFirst({
+        const ri = await prisma.role.findFirst({
             where: {
-                role_type: "mro"
+                role_type: "RI"
             },
             select: {
                 role_id: true
@@ -725,7 +733,7 @@ router.post("/create_report/:app_id", async (req, res) => {
             data: {
                 current_stage: {
                     connect: {
-                        role_id: mro.role_id
+                        role_id: ri.role_id
                     }
                 },
                 updated_at: new Date(), // Updates the timestamp

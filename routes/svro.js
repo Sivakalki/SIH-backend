@@ -647,8 +647,7 @@ router.post("/create_report/:app_id", async (req, res) => {
         if (app_svro.svro_user_id !== handler.user_id) {
             return res.status(400).json({ "message": "You are not eligible access others application" })
         }
-        const level_id = await prisma.
-        role.findFirst({
+        const level_id = await prisma.role.findFirst({
             where: {
                 role_type: "SVRO"
             },

@@ -12,10 +12,12 @@ const userRouter = require("./routes/userRoute"); // Corrected the path
 const applicationRouter = require("./routes/applicationRoute");
 const svroRouter = require("./routes/svro");
 const mvroRouter = require("./routes/mvro");
+const mroRouter = require("./routes/mro");
 const riRouter = require("./routes/ri");
 app.use("/users", userRouter); // Using the router
 app.use("/api", applicationRouter)
 app.use("/svro", svroRouter)
+app.use('/mro' ,    mroRouter)
 app.use("/mvro", mvroRouter)
 app.use("/ri", riRouter)
 app.listen(PORT, () => {
