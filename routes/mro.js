@@ -2,12 +2,27 @@ const express = require("express")
 const path = require('path')
 const prisma = require("../prisma/prisma")
 const { getUserFromToken } = require("../utils/findUser")
+const multer  = require("multer")
 const { verifyToken } = require("../utils/tokenUtils");
 const { dmmfToRuntimeDataModel } = require("@prisma/client/runtime/library");
 const { connect } = require("http2");
 const { create } = require("domain");
 const router = express.Router()
 
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // Specify the directory where files will be stored
+        cb(null, "certificates/"); // Ensure this folder exists or create it
+    },
+    filename: (req, file, cb) => {
+        // Generate unique filenames using timestamp and original extension
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+
+
+const upload = multer({ storage });
 router.get("/load_dashboard", async (req, res) => {
     try {
         const authorizationHeader = req.headers.authorization;
@@ -420,74 +435,55 @@ router.get("/completed_applications", async (req, res) => {
     }
 })
 
-router.post("/reject_application/:app_id", async (req, res) => {
+router.post('generate_certificate/:app_id', upload.single('file'), async (req, res) => {
     try {
         const { app_id } = req.params;
-        const { reason } = req.body;
-
-        // Validate authorization
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ message: "No token provided" });
-        }
-
-        // Get user from token
-        const user = getUserFromToken(authHeader);
-        if (!user || !user.email) {
-            return res.status(401).json({ message: "Invalid token" });
-        }
-
-        // Find the user in the database
-        const mro_user = await prisma.user.findFirst({
-            where: { email: user.email },
-            select: { user_id: true }
+    
+        // Find the application and fetch related caste_id
+        const application = await prismaClient.application.findUnique({
+          where: { application_id: parseInt(app_id) },
+          select: {
+            caste_type: true
+          }
         });
-
-        if (!mro_user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        // Find the application
-        const application = await prisma.application.findUnique({
-            where: { application_id: parseInt(app_id) },
-            select: { mro_user_id: true, current_stage_id: true }
-        });
-
+    
         if (!application) {
-            return res.status(404).json({ message: "Application not found" });
+          return res.status(404).json({ message: "Application not found" });
         }
-
-        // Verify the MRO user has rights to reject
-        const mro_role = await prisma.role.findFirst({
-            where: { role_type: "MRO" },
-            select: { role_id: true }
-        });
-
-        if (!mro_role || application.current_stage_id !== mro_role.role_id) {
-            return res.status(403).json({ message: "Not authorized to reject this application" });
+    
+        const caste_id = application.caste_id;
+    
+        // Handle file upload
+        if (!req.file) {
+          return res.status(400).json({ message: "File not provided" });
         }
-
-        // Update application status
-        const updatedApplication = await prisma.application.update({
-            where: { application_id: parseInt(app_id) },
-            data: {
-                status: "REJECTED",
-                updated_at: new Date()
-            }
+    
+        const file_path = req.file.path;
+    
+        // Calculate validity (one year from now)
+        const validity = new Date();
+        validity.setFullYear(validity.getFullYear() + 1);
+    
+        // Create the certificate entry in the database
+        const certificate = await prismaClient.certificate.create({
+          data: {
+            caste_id,
+            validity,
+            file_path,
+            application_id: parseInt(app_id)
+          } 
         });
-
-        return res.status(200).json({
-            message: "Application rejected successfully",
-            application: updatedApplication
+    
+        return res.status(201).json({
+          message: "Certificate generated successfully",
+          certificate
         });
-    } catch (error) {
-        console.error("Error rejecting application:", error);
-        return res.status(500).json({ 
-            message: "Internal server error", 
-            error: error.message 
-        });
-    }
-});
+      } catch (e) {
+        console.error(e);
+        res.status(400).json({ message: "There is an error in the request" });
+      }
+    });
+    
 
 router.post("/recheck/:app_id", async (req, res) => {
     try {
