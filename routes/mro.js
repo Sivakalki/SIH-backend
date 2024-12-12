@@ -738,7 +738,7 @@ router.post("/create_report/:app_id", async (req, res) => {
         console.log(handler, handler_name, "are the userss")
         const level_id = await prisma.role.findFirst({
             where: {
-                role_type: "ri"
+                role_type: "RI"
             },
             select: {
                 role_id: true
