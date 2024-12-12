@@ -475,7 +475,8 @@ router.post('generate_certificate/:app_id', upload.single('file'), async (req, r
             application_id: parseInt(app_id)
           } 
         });
-    
+        sendEmail(application.email,"Your caste certificate has been generated", "The certificate has been generated successfully")
+        console.log(certificate, " is the certificate")
         return res.status(201).json({
           message: "Certificate generated successfully",
           certificate
