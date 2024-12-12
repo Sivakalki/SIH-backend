@@ -2,12 +2,27 @@ const express = require("express")
 const path = require('path')
 const prisma = require("../prisma/prisma")
 const { getUserFromToken } = require("../utils/findUser")
+const multer  = require("multer")
 const { verifyToken } = require("../utils/tokenUtils");
 const { dmmfToRuntimeDataModel } = require("@prisma/client/runtime/library");
 const { connect } = require("http2");
 const { create } = require("domain");
 const router = express.Router()
 
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // Specify the directory where files will be stored
+        cb(null, "certificates/"); // Ensure this folder exists or create it
+    },
+    filename: (req, file, cb) => {
+        // Generate unique filenames using timestamp and original extension
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+
+
+const upload = multer({ storage });
 router.get("/load_dashboard", async (req, res) => {
     try {
         const authorizationHeader = req.headers.authorization;
@@ -419,6 +434,55 @@ router.get("/completed_applications", async (req, res) => {
     }
 })
 
+router.post('generate_certificate/:app_id', upload.single('file'), async (req, res) => {
+    try {
+        const { app_id } = req.params;
+    
+        // Find the application and fetch related caste_id
+        const application = await prismaClient.application.findUnique({
+          where: { application_id: parseInt(app_id) },
+          select: {
+            caste_type: true
+          }
+        });
+    
+        if (!application) {
+          return res.status(404).json({ message: "Application not found" });
+        }
+    
+        const caste_id = application.caste_id;
+    
+        // Handle file upload
+        if (!req.file) {
+          return res.status(400).json({ message: "File not provided" });
+        }
+    
+        const file_path = req.file.path;
+    
+        // Calculate validity (one year from now)
+        const validity = new Date();
+        validity.setFullYear(validity.getFullYear() + 1);
+    
+        // Create the certificate entry in the database
+        const certificate = await prismaClient.certificate.create({
+          data: {
+            caste_id,
+            validity,
+            file_path,
+            application_id: parseInt(app_id)
+          } 
+        });
+    
+        return res.status(201).json({
+          message: "Certificate generated successfully",
+          certificate
+        });
+      } catch (e) {
+        console.error(e);
+        res.status(400).json({ message: "There is an error in the request" });
+      }
+    });
+    
 
 router.post("/recheck/:app_id", async (req, res) => {
     try {

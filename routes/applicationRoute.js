@@ -7,6 +7,7 @@ const { getUserFromToken } = require("../utils/findUser");
 const router = express.Router();
 const {sendMail} = require("../utils/sendEmail");
 const { CLIENT_RENEG_LIMIT } = require("tls");
+const { sendSms } = require("../utils/notifications");
 
 // Set up file storage for multer
 const storage = multer.diskStorage({
@@ -335,7 +336,7 @@ router.post("/application",
 
       // Send confirmation email
       const emailText = `Your caste certificate application has been successfully submitted.\n\nTracking ID: ${application.application_id}\n\nYou can use this tracking ID to check the status of your application.`;
-      
+      await sendSms(phone_num, emailText);
       await sendMail(
         email, 
         emailText,
