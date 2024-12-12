@@ -8,6 +8,8 @@ const { dmmfToRuntimeDataModel } = require("@prisma/client/runtime/library");
 const { connect } = require("http2");
 const { create } = require("domain");
 const router = express.Router()
+const {sendEmail} = require("../utils/sendEmail")
+// const {sendSms} = require("../utils/sendSms")
 
 
 const storage = multer.diskStorage({
@@ -627,7 +629,7 @@ router.post("reject_application/:app_id", async (req, res) => {
                 rejection_reason: description
             }
         })
-
+        sendEmail(applicaiton.email,"Your caste certificate has been rejected", description)
         return res.status(200).json({ "message": "Application rejected successfully" })
     }
     catch (e) { 
