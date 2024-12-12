@@ -8,6 +8,8 @@ const { dmmfToRuntimeDataModel } = require("@prisma/client/runtime/library");
 const { connect } = require("http2");
 const { create } = require("domain");
 const router = express.Router()
+const {sendEmail} = require("../utils/sendEmail")
+// const {sendSms} = require("../utils/sendSms")
 
 
 const storage = multer.diskStorage({
@@ -204,7 +206,6 @@ router.get("/load_dashboard", async (req, res) => {
     }
 });
 
-
 router.get("/all_applications/:curr_id", async (req, res) => {
     const curr_user_id = req.params.curr_id
     try {
@@ -366,6 +367,7 @@ router.get("/pending_applications", async (req, res) => {
                         role_type: true
                     }
                 },
+                status: true,
                 full_name: true,
             }
 
@@ -373,6 +375,7 @@ router.get("/pending_applications", async (req, res) => {
         const mappedReports = reports.map((report) => ({
             application_id: report.application_id,
             full_name: report.full_name,
+            status: report.status,
             current_stage: report.current_stage.role_type, // Access role_type from the role relation
         }));
         console.log(mappedReports)
@@ -607,6 +610,33 @@ router.get("/get_reports", async (req, res) => {
         return res.status(500).json({ message: "There is an error", error: e.message });
     }
 });
+
+router.post("reject_application/:app_id", async (req, res) => {
+    try {
+        const { app_id } = req.params;
+        const { description } = req.body;
+
+        if (!description) {
+            return res.status(400).json({ message: "Description is required" });
+        }
+
+        const applicaiton = await prisma.application.update({
+            where: {
+                application_id: parseInt(app_id)
+            },
+            data: {
+                status: "REJECTED",
+                rejection_reason: description
+            }
+        })
+        sendEmail(applicaiton.email,"Your caste certificate has been rejected", description)
+        return res.status(200).json({ "message": "Application rejected successfully" })
+    }
+    catch (e) { 
+        console.log(e)  
+        res.status(400).json({ "message": "There is an error in the request" })
+    }
+})
 
 router.get("/get_report/:rep_id", async (req, res) => {
     try {
